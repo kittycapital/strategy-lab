@@ -163,5 +163,12 @@ body{background:transparent;font-family:'Noto Sans KR',system-ui,sans-serif}
   });
 })();
 </script>
+<script>
+setInterval(function(){
+  if(window.parent!==window){
+    window.parent.postMessage({type:'resize-widget',height:document.body.scrollHeight},'*');
+  }
+},300);
+</script>
 </body>
 </html>
