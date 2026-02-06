@@ -91,7 +91,20 @@ table.ct{width:100%;border-collapse:collapse;font-size:11px}
 .pod .pa{font-size:13px;font-weight:700;margin-bottom:2px}.pod .ps{font-size:10px;color:var(--t4);margin-bottom:7px}
 .pod .pv{font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;color:var(--g)}
 .pod .pr{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--t2);margin-top:3px}
-.pfgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px}
+.helpbox{background:var(--bg2);border:1px solid var(--bdr);border-radius:10px;margin-bottom:20px;overflow:hidden}
+.helpbtn{width:100%;padding:10px 16px;background:none;border:none;color:var(--t2);font-size:12px;font-family:inherit;cursor:pointer;display:flex;align-items:center;gap:6px;transition:.15s}
+.helpbtn:hover{color:var(--t1);background:var(--bg3)}
+.helpbtn .arrow{transition:transform .2s;font-size:10px}
+.helpbtn .arrow.open{transform:rotate(90deg)}
+.helpcontent{padding:0 16px 14px;font-size:12px;color:var(--t2);line-height:1.8}
+.helpcontent b{color:var(--t1);font-weight:600}
+.helpcontent .hitem{margin-bottom:8px}
+.helpcontent .tag{display:inline-block;background:rgba(0,255,136,.08);color:var(--g);padding:1px 6px;border-radius:4px;font-size:10px;font-weight:600;margin-right:4px;font-family:'JetBrains Mono',monospace}
+.glossary{margin-top:10px;padding-top:10px;border-top:1px solid var(--bdr)}
+.glossary .gi{display:flex;gap:8px;margin-bottom:6px;font-size:11px}
+.glossary .gi .gt{color:var(--g);font-weight:700;min-width:44px;font-family:'JetBrains Mono',monospace;font-size:10px}
+.glossary .gi .gd{color:var(--t3)}
+.pfgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;max-width:1100px;margin:0 auto}
 .pfcard{background:var(--bg2);border:1px solid var(--bdr);border-radius:11px;padding:20px}
 .pfcard h3{font-size:15px;font-weight:700;margin-bottom:3px}.pfcard .dd{font-size:11px;color:var(--t2);margin-bottom:14px}
 .abar{display:flex;height:22px;border-radius:3px;overflow:hidden;margin-bottom:10px}
@@ -99,7 +112,7 @@ table.ct{width:100%;border-collapse:collapse;font-size:11px}
 .alist{font-size:10px}
 .aitm{display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid var(--bdr)}
 .aitm .dot{width:7px;height:7px;border-radius:50%;margin-right:6px;display:inline-block}
-@media(max-width:900px){.sim-layout{grid-template-columns:1fr}.sidebar{position:static}.podium{grid-template-columns:1fr}.hdr{padding:12px 16px}.main{padding:12px 16px}}
+@media(max-width:900px){.sim-layout{grid-template-columns:1fr}.sidebar{position:static}.podium{grid-template-columns:1fr}.pfgrid{grid-template-columns:1fr}.hdr{padding:12px 16px}.main{padding:12px 16px}}
 </style>
 </head>
 <body>
@@ -287,7 +300,7 @@ function CanvasChart(props){
 
     // 거치식 (점선)
     if(showBH){
-      ctx.setLineDash([4,4]);ctx.lineWidth=1.5;ctx.strokeStyle='#ffffff15';
+      ctx.setLineDash([4,4]);ctx.lineWidth=1.5;ctx.strokeStyle='#8888aa';
       results.forEach(function(r){
         ctx.beginPath();var started=false;
         for(var i=0;i<chartData.length;i++){
@@ -338,7 +351,7 @@ function CanvasChart(props){
     React.createElement('canvas',{ref:canvasRef,style:{display:'block'}}),
     React.createElement('div',{style:{position:'absolute',top:4,right:8,display:'flex',gap:12,flexWrap:'wrap'}},
       results.map(function(r){return React.createElement('div',{key:r.ticker,style:{display:'flex',alignItems:'center',gap:4,fontSize:10,color:COLORS[r.ticker]}},React.createElement('div',{style:{width:10,height:3,background:COLORS[r.ticker],borderRadius:2}}),lb(r.ticker));}),
-      showBH&&React.createElement('div',{style:{display:'flex',alignItems:'center',gap:4,fontSize:10,color:'#ffffff40'}},React.createElement('div',{style:{width:10,height:1,background:'#ffffff30'}}),'\uAC70\uCE58\uC2DD')
+      showBH&&React.createElement('div',{style:{display:'flex',alignItems:'center',gap:4,fontSize:10,color:'#8888aa'}},React.createElement('div',{style:{width:10,height:1,background:'#8888aa'}}),'\uAC70\uCE58\uC2DD')
     ),
     tip&&React.createElement('div',{style:{position:'absolute',left:Math.min(tip.x+12,(wrapRef.current?wrapRef.current.clientWidth:800)-180),top:Math.max(tip.y-60,8),background:'#0d0d16ee',border:'1px solid #282845',borderRadius:8,padding:'8px 10px',fontSize:10,pointerEvents:'none',zIndex:10,minWidth:140}},
       React.createElement('div',{style:{color:'#9090a8',marginBottom:4,fontFamily:'JetBrains Mono,monospace'}},tip.date),
@@ -353,6 +366,28 @@ function SC(props){
     React.createElement('div',{className:'sl'},props.label),
     React.createElement('div',{className:'sv'+(props.pos===true?' pos':props.pos===false?' neg':'')},props.value),
     props.sub&&React.createElement('div',{className:'ss'},props.sub)
+  );
+}
+
+/* ===== 도움말 박스 ===== */
+function HelpBox(props){
+  var s1=useState(false),open=s1[0],setOpen=s1[1];
+  return React.createElement('div',{className:'helpbox'},
+    React.createElement('button',{className:'helpbtn',onClick:function(){setOpen(!open);}},
+      React.createElement('span',{className:'arrow'+(open?' open':'')},'\u25B6'),
+      'ℹ️ 사용법 & 용어 설명'
+    ),
+    open&&React.createElement('div',{className:'helpcontent'},
+      props.children,
+      React.createElement('div',{className:'glossary'},
+        React.createElement('div',{style:{fontWeight:700,color:'var(--t1)',marginBottom:6,fontSize:11}},'📖 용어 설명'),
+        React.createElement('div',{className:'gi'},React.createElement('span',{className:'gt'},'CAGR'),React.createElement('span',{className:'gd'},'연평균 복리 수익률. 예: 10년간 +100% 수익이면 CAGR ≈ +7.2%')),
+        React.createElement('div',{className:'gi'},React.createElement('span',{className:'gt'},'MDD'),React.createElement('span',{className:'gd'},'최대 낙폭. 고점 대비 가장 크게 떨어진 폭. -30%면 자산이 최대 30% 감소한 적 있음')),
+        React.createElement('div',{className:'gi'},React.createElement('span',{className:'gt'},'거치식'),React.createElement('span',{className:'gd'},'전체 투자금을 첫날 한 번에 투입하는 방식. 적립식과 성과를 비교하는 기준선')),
+        React.createElement('div',{className:'gi'},React.createElement('span',{className:'gt'},'RSI'),React.createElement('span',{className:'gd'},'과매수/과매도 지표. 30 이하 = 과매도(매수 신호), 70 이상 = 과매수')),
+        React.createElement('div',{className:'gi'},React.createElement('span',{className:'gt'},'이평선'),React.createElement('span',{className:'gd'},'이동평균선. 일정 기간 동안의 평균 가격. 200일선이 대표적'))
+      )
+    )
   );
 }
 
@@ -400,7 +435,17 @@ function Simulator(){
     {id:'hybrid',l:'하이브리드',d:'적립식 + 급락시 추가 매수'}
   ];
 
-  return React.createElement('div',{className:'sim-layout'},
+  return React.createElement('div',null,
+    React.createElement(HelpBox,null,
+      React.createElement('div',{className:'hitem'},React.createElement('b',null,'사용법: '),'왼쪽에서 자산과 전략을 선택하고, 설정을 조정한 뒤 ',React.createElement('span',{style:{color:'var(--g)',fontWeight:600}},'▶ 실행'),' 버튼을 누르세요. 최대 4개 자산을 동시에 비교할 수 있습니다.'),
+      React.createElement('div',{style:{marginTop:8,marginBottom:4,fontWeight:600,color:'var(--t1)',fontSize:11}},'전략 설명'),
+      React.createElement('div',{className:'hitem'},React.createElement('span',{className:'tag'},'정액 적립식'),' 매월 동일 금액을 매수합니다 (예: 매달 $500)'),
+      React.createElement('div',{className:'hitem'},React.createElement('span',{className:'tag'},'이동평균선'),' 가격이 이동평균선 아래일 때만 매수합니다. 저평가 구간에서 집중 매수하는 전략'),
+      React.createElement('div',{className:'hitem'},React.createElement('span',{className:'tag'},'급락 매수'),' 고점 대비 일정% 하락하거나 RSI가 낮을 때 집중 매수. 평소엔 소량만 매수'),
+      React.createElement('div',{className:'hitem'},React.createElement('span',{className:'tag'},'하이브리드'),' 기본 적립식 + 급락/이평선 이탈 시 추가 매수. 꾸준함과 기회 포착을 동시에'),
+      React.createElement('div',{className:'hitem',style:{marginTop:8}},'📈 차트의 ',React.createElement('span',{style:{color:'#8888aa',fontWeight:600}},'점선'),'은 거치식(같은 금액을 첫날 일시불 투자) 대비 성과를 보여줍니다.')
+    ),
+    React.createElement('div',{className:'sim-layout'},
     React.createElement('div',{className:'sidebar'},
       React.createElement('div',{className:'stitle'},'자산 선택 (최대 4개)'),
       React.createElement(AssetSel,{sel:assets,onChange:setA,max:4}),
@@ -488,6 +533,7 @@ function Simulator(){
         )
       )
     )
+    )
   );
 }
 
@@ -518,6 +564,11 @@ function TimeMachine(){
   },80);};
 
   return React.createElement('div',null,
+    React.createElement(HelpBox,null,
+      React.createElement('div',{className:'hitem'},React.createElement('b',null,'사용법: '),'시작 시점과 월 투자금을 선택한 뒤 ',React.createElement('span',{style:{color:'var(--g)',fontWeight:600}},'🚀 전체 전략 계산'),' 버튼을 누르세요.'),
+      React.createElement('div',{className:'hitem'},'15개 자산 × 7개 전략 = ',React.createElement('b',null,'105개 조합'),'을 자동으로 계산하여 수익률 순으로 정렬합니다.'),
+      React.createElement('div',{className:'hitem'},'과거 시점부터 매월 꾸준히 투자했다면 오늘 자산이 얼마가 됐을지 확인해보세요.')
+    ),
     React.createElement('div',{className:'tm-hero'},
       React.createElement('h2',null,'⏰ 타임머신'),
       React.createElement('p',null,'과거의 한 시점을 선택하세요. 모든 전략의 현재 가치를 계산합니다.')
@@ -618,6 +669,14 @@ function BestPortfolios(){
   useEffect(run,[period]);
 
   return React.createElement('div',null,
+    React.createElement(HelpBox,null,
+      React.createElement('div',{className:'hitem'},React.createElement('b',null,'사용법: '),'기간을 선택하면 자동으로 최적 포트폴리오를 계산합니다.'),
+      React.createElement('div',{className:'hitem'},'단일 자산이 아닌 여러 자산에 분산 투자했을 때의 최적 배분을 보여줍니다.'),
+      React.createElement('div',{className:'hitem'},React.createElement('span',{className:'tag'},'최대 수익'),' 총 수익률이 가장 높은 자산 조합'),
+      React.createElement('div',{className:'hitem'},React.createElement('span',{className:'tag'},'위험 대비 수익'),' 낙폭 대비 수익률이 가장 좋은 자산 조합 (리스크 효율)'),
+      React.createElement('div',{className:'hitem'},React.createElement('span',{className:'tag'},'최소 낙폭'),' 하락장에서 가장 적게 떨어지는 안정적인 자산 조합'),
+      React.createElement('div',{className:'hitem',style:{marginTop:6}},'비율은 상위 5개 자산에 35% / 25% / 20% / 12% / 8%로 배분합니다.')
+    ),
     React.createElement('div',{style:{textAlign:'center',padding:'28px 0 18px'}},
       React.createElement('h2',{style:{fontSize:26,fontWeight:800,marginBottom:6}},'최적 포트폴리오'),
       React.createElement('p',{style:{color:'var(--t2)',fontSize:13,marginBottom:16}},'$500/월 적립식 기준 최적 자산 배분'),
