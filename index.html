@@ -378,7 +378,17 @@ function HelpBox(props){
     open&&React.createElement('div',{className:'helpcontent'},
       props.children,
       React.createElement('div',{className:'glossary'},
-        React.createElement('div',{style:{fontWeight:700,color:'var(--t1)',marginBottom:6,fontSize:11}},'📖 용어 설명'),
+        React.createElement('div',{style:{fontWeight:700,color:'var(--t1)',marginBottom:6,fontSize:11}},'📖 전략 설명'),
+        React.createElement('div',{className:'gi'},React.createElement('span',{className:'gt'},'적립식 (매일/매주/매월)'),React.createElement('span',{className:'gd'},'정해진 주기로 동일 금액을 매수하는 가장 기본적인 전략')),
+        React.createElement('div',{className:'gi'},React.createElement('span',{className:'gt'},'이동평균선 (MA일, -N%)'),React.createElement('span',{className:'gd'},'가격이 이동평균선보다 N% 아래일 때만 매수. 저평가 구간에 집중 투자')),
+        React.createElement('div',{className:'gi'},React.createElement('span',{className:'gt'},'급락 매수 (하락 -N%, RSI N)'),React.createElement('span',{className:'gd'},'고점 대비 N% 이상 하락하고 RSI가 기준 이하일 때 집중 매수. 폭락장에서 공격적 매수')),
+        React.createElement('div',{className:'gi'},React.createElement('span',{className:'gt'},'하이브리드 (MA+하락)'),React.createElement('span',{className:'gd'},'기본 적립식 + 이평선/급락 조건 충족 시 추가 매수. 꾸준함과 기회 포착을 동시에')),
+        React.createElement('div',{style:{fontWeight:700,color:'var(--t1)',marginTop:10,marginBottom:6,fontSize:11}},'🔢 숫자 의미'),
+        React.createElement('div',{className:'gi'},React.createElement('span',{className:'gt'},'하락 -20%'),React.createElement('span',{className:'gd'},'최근 고점 대비 20% 이상 떨어졌을 때 매수 신호 발동')),
+        React.createElement('div',{className:'gi'},React.createElement('span',{className:'gt'},'RSI 30'),React.createElement('span',{className:'gd'},'과매도 지표가 30 이하일 때 매수. 숫자가 낮을수록 더 떨어진 상태')),
+        React.createElement('div',{className:'gi'},React.createElement('span',{className:'gt'},'MA 200일'),React.createElement('span',{className:'gd'},'200일 이동평균선 기준. 장기 추세 판단에 사용')),
+        React.createElement('div',{className:'gi'},React.createElement('span',{className:'gt'},'-15%'),React.createElement('span',{className:'gd'},'이동평균선보다 15% 아래일 때 매수 신호')),
+        React.createElement('div',{style:{fontWeight:700,color:'var(--t1)',marginTop:10,marginBottom:6,fontSize:11}},'📖 용어 설명'),
         React.createElement('div',{className:'gi'},React.createElement('span',{className:'gt'},'CAGR'),React.createElement('span',{className:'gd'},'연평균 복리 수익률. 예: 10년간 +100% 수익이면 CAGR ≈ +7.2%')),
         React.createElement('div',{className:'gi'},React.createElement('span',{className:'gt'},'MDD'),React.createElement('span',{className:'gd'},'최대 낙폭. 고점 대비 가장 크게 떨어진 폭. -30%면 자산이 최대 30% 감소한 적 있음')),
         React.createElement('div',{className:'gi'},React.createElement('span',{className:'gt'},'거치식'),React.createElement('span',{className:'gd'},'전체 투자금을 첫날 한 번에 투입하는 방식. 적립식과 성과를 비교하는 기준선')),
@@ -774,7 +784,7 @@ function BestPortfolios(){
     var byS=av.slice().sort(function(a,b){var sa=ar[a].maxDD!==0?ar[a].cagr/Math.abs(ar[a].maxDD):0;var sb=ar[b].maxDD!==0?ar[b].cagr/Math.abs(ar[b].maxDD):0;return sb-sa;});
 
     var build=function(ranked,name,desc,pfColor){
-      var top=ranked.slice(0,5),ws=[35,25,20,12,8];
+      var top=ranked.slice(0,5),ws=[20,20,20,20,20];
       var allocs=top.map(function(t,i){var o=Object.assign({},ar[t]);o.w=ws[i];o.color=PC[ASSETS.indexOf(t)];return o;});
       var wr=allocs.reduce(function(s,a){return s+a.totalReturn*a.w/100;},0);
       var wc=allocs.reduce(function(s,a){return s+a.cagr*a.w/100;},0);
@@ -811,7 +821,7 @@ function BestPortfolios(){
       React.createElement('div',{className:'hitem'},React.createElement('span',{className:'tag'},'최대 수익'),' 총 수익률이 가장 높은 자산 조합'),
       React.createElement('div',{className:'hitem'},React.createElement('span',{className:'tag'},'위험 대비 수익'),' 낙폭 대비 수익률이 가장 좋은 자산 조합 (리스크 효율)'),
       React.createElement('div',{className:'hitem'},React.createElement('span',{className:'tag'},'최소 낙폭'),' 하락장에서 가장 적게 떨어지는 안정적인 자산 조합'),
-      React.createElement('div',{className:'hitem',style:{marginTop:6}},'비율은 상위 5개 자산에 35% / 25% / 20% / 12% / 8%로 배분합니다.')
+      React.createElement('div',{className:'hitem',style:{marginTop:6}},'상위 5개 자산에 각 20%씩 균등 배분합니다.')
     ),
     React.createElement('div',{style:{textAlign:'center',padding:'28px 0 18px'}},
       React.createElement('h2',{style:{fontSize:26,fontWeight:800,marginBottom:6}},'최적 포트폴리오'),
@@ -1054,22 +1064,22 @@ function AISimulator(){
     var paramSets=[];
     var periods=[3,5,10,15,20,25];
     ['daily','weekly','monthly'].forEach(function(f){
-      periods.forEach(function(p){paramSets.push({sType:'dca',label:'적립식('+({daily:'매일',weekly:'매주',monthly:'매월'}[f])+')',period:p,params:{budget:budget,frequency:f}});});
+      periods.forEach(function(p){paramSets.push({sType:'dca',label:'적립식 ('+({daily:'매일',weekly:'매주',monthly:'매월'}[f])+')',period:p,params:{budget:budget,frequency:f}});});
     });
     [50,100,150,200,250].forEach(function(ma){
       [-15,-10,-5,0,3].forEach(function(th){
-        periods.forEach(function(p){paramSets.push({sType:'ma',label:'이평선'+ma+'일/'+th+'%',period:p,params:{budget:budget,maPeriod:ma,maThreshold:th}});});
+        periods.forEach(function(p){paramSets.push({sType:'ma',label:'이평선 '+ma+'일 / '+th+'%',period:p,params:{budget:budget,maPeriod:ma,maThreshold:th}});});
       });
     });
     [-5,-10,-15,-20,-25,-30].forEach(function(dip){
       [25,30,35,40].forEach(function(rsi){
-        periods.forEach(function(p){paramSets.push({sType:'dip',label:'급락'+dip+'%/RSI'+rsi,period:p,params:{budget:budget,dipThreshold:dip,rsiThreshold:rsi}});});
+        periods.forEach(function(p){paramSets.push({sType:'dip',label:'급락 '+dip+'% / RSI '+rsi,period:p,params:{budget:budget,dipThreshold:dip,rsiThreshold:rsi}});});
       });
     });
     [100,200].forEach(function(ma){
       [-10,-15,-20].forEach(function(dip){
         [25,30].forEach(function(rsi){
-          periods.forEach(function(p){paramSets.push({sType:'hybrid',label:'하이브리드MA'+ma+'/'+dip+'%',period:p,params:{budget:budget,maPeriod:ma,dipThreshold:dip,rsiThreshold:rsi}});});
+          periods.forEach(function(p){paramSets.push({sType:'hybrid',label:'하이브리드 MA'+ma+' / '+dip+'%',period:p,params:{budget:budget,maPeriod:ma,dipThreshold:dip,rsiThreshold:rsi}});});
         });
       });
     });
