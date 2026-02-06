@@ -38,7 +38,7 @@ body{background:transparent;font-family:'Noto Sans KR',system-ui,sans-serif}
   // ===== Engine (minimal copy) =====
   var ASSETS=['SPY','QQQ','DIA','IWM','BTC_USD','ETH_USD','GLD','SLV','USO','TLT','EEM','EWY','XLE','SCHD','ARKK'];
   var KR={SPY:'S&P 500 (SPY)',QQQ:'나스닥 100 (QQQ)',DIA:'다우존스 (DIA)',IWM:'러셀 2000 (IWM)',BTC_USD:'비트코인 (BTC)',ETH_USD:'이더리움 (ETH)',GLD:'금 (GLD)',SLV:'은 (SLV)',USO:'원유 (USO)',TLT:'미국채 20년 (TLT)',EEM:'신흥국 (EEM)',EWY:'한국 (EWY)',XLE:'에너지 (XLE)',SCHD:'배당 ETF (SCHD)',ARKK:'ARKK 혁신'};
-  var LINK='https://kittycapital.github.io/strategy-lab/';
+  var LINK='https://herdvibe.com/49';
 
   function calcSMA(p,n){var s=new Array(p.length).fill(null);for(var i=n-1;i<p.length;i++){var sum=0;for(var j=i-n+1;j<=i;j++)sum+=p[j];s[i]=sum/n;}return s;}
   function calcRSI(p,n){var r=new Array(p.length).fill(null);if(p.length<n+1)return r;var g=0,l=0;for(var i=1;i<=n;i++){var c=p[i]-p[i-1];if(c>0)g+=c;else l-=c;}var ag=g/n,al=l/n;r[n]=al===0?100:100-100/(1+ag/al);for(var i=n+1;i<p.length;i++){var c=p[i]-p[i-1];ag=(ag*(n-1)+Math.max(c,0))/n;al=(al*(n-1)+Math.max(-c,0))/n;r[i]=al===0?100:100-100/(1+ag/al);}return r;}
