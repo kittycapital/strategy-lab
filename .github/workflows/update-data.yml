@@ -1,0 +1,90 @@
+name: Update Market Data
+
+on:
+  schedule:
+    # Runs daily at 6:00 AM UTC (3:00 PM KST) - after US market close
+    - cron: '0 6 * * 1-6'
+  workflow_dispatch: # Manual trigger
+
+jobs:
+  update-data:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install yfinance
+
+      - name: Download latest market data
+        run: |
+          python3 << 'EOF'
+          import yfinance as yf
+          import json
+          import os
+          from datetime import datetime
+
+          assets = {
+              'SPY': 'S&P 500', 'QQQ': 'Nasdaq 100', 'DIA': 'Dow Jones', 'IWM': 'Russell 2000',
+              'BTC-USD': 'Bitcoin', 'ETH-USD': 'Ethereum', 'GLD': 'Gold', 'SLV': 'Silver',
+              'USO': 'Oil', 'TLT': '20Y Treasury', 'EEM': 'Emerging Mkts', 'EWY': 'Korea (KOSPI)',
+              'XLE': 'Energy Sector', 'SCHD': 'Dividend ETF', 'ARKK': 'ARKK Innovation'
+          }
+
+          categories = {
+              'US Index': ['SPY','QQQ','DIA','IWM'],
+              'Crypto': ['BTC_USD','ETH_USD'],
+              'Commodities': ['GLD','SLV','USO'],
+              'Bonds': ['TLT'],
+              'International': ['EEM','EWY'],
+              'Sector/Thematic': ['XLE','SCHD','ARKK']
+          }
+
+          result = {}
+          for ticker, label in assets.items():
+              print(f"Downloading {ticker}...")
+              try:
+                  df = yf.download(ticker, period="max", auto_adjust=True)
+                  if df.empty:
+                      print(f"  WARNING: No data for {ticker}")
+                      continue
+                  
+                  key = ticker.replace('-', '_')
+                  dates = [d.strftime('%Y-%m-%d') for d in df.index]
+                  prices = [round(float(p), 2) for p in df['Close'].values.flatten()]
+                  result[key] = {'dates': dates, 'prices': prices, 'label': label}
+                  print(f"  OK: {len(dates)} rows, {dates[0]} to {dates[-1]}")
+              except Exception as e:
+                  print(f"  ERROR: {ticker} - {e}")
+
+          # Write data.js
+          js = f"const ASSET_DATA = {json.dumps(result, separators=(',',':'))};\n"
+          js += f"const CATEGORIES = {json.dumps(categories, separators=(',',':'))};\n"
+          
+          with open('data.js', 'w') as f:
+              f.write(js)
+
+          size_kb = os.path.getsize('data.js') / 1024
+          print(f"\ndata.js updated: {size_kb:.0f} KB")
+          print(f"Last updated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}")
+          EOF
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data.js
+          if git diff --staged --quiet; then
+            echo "No data changes detected"
+          else
+            git commit -m "📊 Auto-update market data $(date -u +'%Y-%m-%d')"
+            git push
+          fi
