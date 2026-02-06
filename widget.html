@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>최적 포트폴리오 위젯</title>
+<script src="data.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:transparent;font-family:'Noto Sans KR',system-ui,sans-serif}
+.widget{max-width:1100px;margin:0 auto;padding:20px}
+.widget-title{text-align:center;margin-bottom:24px}
+.widget-title h2{font-size:24px;font-weight:800;color:#e8e8f0;margin-bottom:4px}
+.widget-title p{font-size:12px;color:#b0b0c8}
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.card{background:#0d0d16;border:1px solid #1a1a2e;border-radius:12px;padding:20px;cursor:pointer;transition:all .25s;position:relative;overflow:hidden}
+.card:hover{border-color:#282845;transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.4)}
+.card::after{content:'자세히 보기 →';position:absolute;bottom:0;left:0;right:0;padding:10px;text-align:center;font-size:11px;font-weight:600;color:#000;background:linear-gradient(135deg,#00ff88,#00ccee);transform:translateY(100%);transition:transform .25s}
+.card:hover::after{transform:translateY(0)}
+.card h3{font-size:15px;font-weight:700;color:#e8e8f0;margin-bottom:2px}
+.card .desc{font-size:10px;color:#8888a0;margin-bottom:10px}
+.card .ret{font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;color:#00ff88;margin-bottom:2px}
+.card .cagr{font-family:'JetBrains Mono',monospace;font-size:10px;color:#b0b0c8;margin-bottom:12px}
+.card canvas{display:block;margin-bottom:10px}
+.bar{display:flex;height:20px;border-radius:3px;overflow:hidden;margin-bottom:8px}
+.alloc{font-size:10px;color:#b0b0c8}
+.alloc-row{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid #1a1a2e}
+.alloc-row .dot{width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:5px}
+.alloc-row .val{font-family:'JetBrains Mono',monospace;font-weight:600;color:#e8e8f0}
+@media(max-width:800px){.cards{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="widget" id="widget"></div>
+<script>
+(function(){
+  // ===== Engine (minimal copy) =====
+  var ASSETS=['SPY','QQQ','DIA','IWM','BTC_USD','ETH_USD','GLD','SLV','USO','TLT','EEM','EWY','XLE','SCHD','ARKK'];
+  var KR={SPY:'S&P 500',QQQ:'나스닥 100',DIA:'다우존스',IWM:'러셀 2000',BTC_USD:'비트코인',ETH_USD:'이더리움',GLD:'금 (Gold)',SLV:'은 (Silver)',USO:'원유 (Oil)',TLT:'미국채 20년',EEM:'신흥국',EWY:'한국 (KOSPI)',XLE:'에너지',SCHD:'배당 ETF',ARKK:'ARKK 혁신'};
+  var LINK='https://kittycapital.github.io/strategy-lab/';
+
+  function calcSMA(p,n){var s=new Array(p.length).fill(null);for(var i=n-1;i<p.length;i++){var sum=0;for(var j=i-n+1;j<=i;j++)sum+=p[j];s[i]=sum/n;}return s;}
+  function calcRSI(p,n){var r=new Array(p.length).fill(null);if(p.length<n+1)return r;var g=0,l=0;for(var i=1;i<=n;i++){var c=p[i]-p[i-1];if(c>0)g+=c;else l-=c;}var ag=g/n,al=l/n;r[n]=al===0?100:100-100/(1+ag/al);for(var i=n+1;i<p.length;i++){var c=p[i]-p[i-1];ag=(ag*(n-1)+Math.max(c,0))/n;al=(al*(n-1)+Math.max(-c,0))/n;r[i]=al===0?100:100-100/(1+ag/al);}return r;}
+  function calcDD(p){var d=new Array(p.length).fill(0);var pk=p[0];for(var i=1;i<p.length;i++){if(p[i]>pk)pk=p[i];d[i]=(p[i]-pk)/pk;}return d;}
+  function findIdx(dates,t){for(var i=0;i<dates.length;i++){if(dates[i]>=t)return i;}return dates.length-1;}
+
+  function runDCA(ticker,budget,startDate){
+    var raw=ASSET_DATA[ticker];if(!raw)return null;
+    var dates=raw.dates,prices=raw.prices;
+    var si=findIdx(dates,startDate),ei=dates.length-1;
+    if(si>=ei)return null;
+    var shares=0,invested=0,lastM=-1;
+    var curve=[];
+    for(var i=si;i<=ei;i++){
+      var dt=new Date(dates[i]);var mo=dt.getFullYear()*12+dt.getMonth();
+      if(mo!==lastM){lastM=mo;shares+=budget/prices[i];invested+=budget;}
+      curve.push({value:Math.round(shares*prices[i]*100)/100,invested:Math.round(invested*100)/100,date:dates[i]});
+    }
+    if(!curve.length||invested===0)return null;
+    var fv=curve[curve.length-1].value;
+    var yrs=(new Date(dates[ei])-new Date(dates[si]))/(365.25*864e5);
+    var tr=((fv-invested)/invested)*100;
+    var cagr=yrs>0?(Math.pow(fv/invested,1/yrs)-1)*100:0;
+    var pk=0,mdd=0;for(var j=0;j<curve.length;j++){if(curve[j].value>pk)pk=curve[j].value;var d=pk>0?(curve[j].value-pk)/pk:0;if(d<mdd)mdd=d;}
+    return{ticker:ticker,label:KR[ticker]||ticker,curve:curve,invested:invested,finalValue:fv,totalReturn:tr,cagr:cagr,maxDD:mdd*100};
+  }
+
+  function fmt(n){if(Math.abs(n)>=1e6)return'$'+(n/1e6).toFixed(2)+'M';if(Math.abs(n)>=1e3)return'$'+(n/1e3).toFixed(1)+'K';return'$'+n.toFixed(2);}
+  function fPct(n){return(n>=0?'+':'')+n.toFixed(2)+'%';}
+
+  // ===== Compute =====
+  var PERIOD=3;
+  var d=new Date();d.setFullYear(d.getFullYear()-PERIOD);
+  var sd=d.toISOString().split('T')[0];
+  var ar={};
+  ASSETS.forEach(function(t){var r=runDCA(t,500,sd);if(r)ar[t]=r;});
+  var av=Object.keys(ar);
+
+  var byR=av.slice().sort(function(a,b){return ar[b].totalReturn-ar[a].totalReturn;});
+  var byDD=av.slice().sort(function(a,b){return ar[b].maxDD-ar[a].maxDD;});
+  var byS=av.slice().sort(function(a,b){
+    var sa=ar[a].maxDD!==0?ar[a].cagr/Math.abs(ar[a].maxDD):0;
+    var sb=ar[b].maxDD!==0?ar[b].cagr/Math.abs(ar[b].maxDD):0;
+    return sb-sa;
+  });
+
+  var PC=['#00ff88','#4488ff','#ffcc00','#ff8844','#f7931a','#627eea','#ffd700','#00ccee','#aa66ff','#ff4466','#44cc44','#ff66aa','#cc44ff','#c0c0c0','#8b6914'];
+  var PF_COLORS=['#00ff88','#4488ff','#ffcc00'];
+
+  function buildPF(ranked,name,desc,color){
+    var top=ranked.slice(0,5),ws=[35,25,20,12,8];
+    var allocs=top.map(function(t,i){return{ticker:t,label:ar[t].label,w:ws[i],color:PC[ASSETS.indexOf(t)],ret:ar[t].totalReturn,curve:ar[t].curve};});
+    var wr=allocs.reduce(function(s,a){return s+a.ret*a.w/100;},0);
+    var wc=0;allocs.forEach(function(a){var r=ar[a.ticker];if(r)wc+=r.cagr*a.w/100;});
+    var minLen=Infinity;allocs.forEach(function(a){if(a.curve.length<minLen)minLen=a.curve.length;});
+    var pfCurve=[];
+    for(var i=0;i<minLen;i++){var v=0;allocs.forEach(function(a){v+=a.curve[i].value*(a.w/100);});pfCurve.push(v);}
+    return{name:name,desc:desc,allocs:allocs,wr:wr,wc:wc,pfCurve:pfCurve,color:color};
+  }
+
+  var portfolios=[
+    buildPF(byR,'🚀 최대 수익','총 수익률 최대화',PF_COLORS[0]),
+    buildPF(byS,'⚖️ 위험 대비 수익','낙폭 대비 수익률 최적화',PF_COLORS[1]),
+    buildPF(byDD,'🛡️ 최소 낙폭','포트폴리오 하락 최소화',PF_COLORS[2])
+  ];
+
+  // ===== Render =====
+  var root=document.getElementById('widget');
+  var html='<div class="widget-title"><h2>'+PERIOD+'년 최적 포트폴리오</h2><p>$500/월 적립식 기준 · 데이터 자동 업데이트</p></div><div class="cards">';
+
+  portfolios.forEach(function(p,pi){
+    html+='<div class="card" onclick="window.open(\''+LINK+'\',\'_blank\')">';
+    html+='<h3>'+p.name+'</h3><div class="desc">'+p.desc+'</div>';
+    html+='<div class="ret">'+fPct(p.wr)+' 수익</div>';
+    html+='<div class="cagr">CAGR: '+fPct(p.wc)+'</div>';
+    html+='<canvas id="spark'+pi+'" height="80" style="width:100%"></canvas>';
+    html+='<div class="bar">';
+    p.allocs.forEach(function(a){html+='<div style="width:'+a.w+'%;background:'+a.color+'" title="'+a.label+': '+a.w+'%"></div>';});
+    html+='</div><div class="alloc">';
+    p.allocs.forEach(function(a){
+      html+='<div class="alloc-row"><span><span class="dot" style="background:'+a.color+'"></span>'+a.label+'</span><span class="val">'+a.w+'% · '+fPct(a.ret)+'</span></div>';
+    });
+    html+='</div></div>';
+  });
+  html+='</div>';
+  root.innerHTML=html;
+
+  // Draw sparklines
+  portfolios.forEach(function(p,pi){
+    var c=document.getElementById('spark'+pi);
+    if(!c)return;
+    var w=c.parentElement.clientWidth-40;
+    var h=80;var dpr=window.devicePixelRatio||1;
+    c.width=w*dpr;c.height=h*dpr;c.style.width=w+'px';c.style.height=h+'px';
+    var ctx=c.getContext('2d');ctx.scale(dpr,dpr);
+    var data=p.pfCurve;
+    var mn=Infinity,mx=-Infinity;
+    data.forEach(function(v){if(v<mn)mn=v;if(v>mx)mx=v;});
+    if(mn===mx){mn*=0.9;mx*=1.1;}
+    var pad=2,cw2=w-pad*2,ch2=h-pad*2;
+    var step=Math.max(1,Math.floor(data.length/200));
+    // Area
+    ctx.beginPath();ctx.moveTo(pad,h-pad);
+    for(var i=0;i<data.length;i+=step){
+      var x=pad+(i/(data.length-1))*cw2;
+      var y=pad+ch2-(data[i]-mn)/(mx-mn)*ch2;
+      ctx.lineTo(x,y);
+    }
+    ctx.lineTo(pad+cw2,h-pad);ctx.closePath();
+    var grad=ctx.createLinearGradient(0,0,0,h);
+    grad.addColorStop(0,p.color+'35');grad.addColorStop(1,p.color+'05');
+    ctx.fillStyle=grad;ctx.fill();
+    // Line
+    ctx.beginPath();ctx.strokeStyle=p.color;ctx.lineWidth=2;ctx.lineJoin='round';
+    var started=false;
+    for(var i=0;i<data.length;i+=step){
+      var x=pad+(i/(data.length-1))*cw2;
+      var y=pad+ch2-(data[i]-mn)/(mx-mn)*ch2;
+      if(!started){ctx.moveTo(x,y);started=true;}else ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+  });
+})();
+</script>
+</body>
+</html>
