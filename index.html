@@ -1,0 +1,1427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Strategy Lab — Multi-Asset Investment Simulator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.15.0/Recharts.min.js"></script>
+<script src="data.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-primary: #000000;
+    --bg-secondary: #0a0a0f;
+    --bg-card: #0d0d14;
+    --bg-card-hover: #12121c;
+    --border: #1a1a2e;
+    --border-bright: #252540;
+    --text-primary: #e8e8f0;
+    --text-secondary: #8888a0;
+    --text-muted: #555570;
+    --accent-green: #00ff88;
+    --accent-green-dim: #00cc6a;
+    --accent-red: #ff4466;
+    --accent-blue: #4488ff;
+    --accent-yellow: #ffcc00;
+    --accent-purple: #aa66ff;
+    --accent-cyan: #00ccee;
+    --accent-orange: #ff8844;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg-secondary); }
+  ::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 3px; }
+
+  .header {
+    padding: 20px 32px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--bg-secondary);
+  }
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .logo-icon {
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, var(--accent-green), var(--accent-cyan));
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 18px; color: #000;
+  }
+  .logo-text {
+    font-weight: 700; font-size: 20px;
+    background: linear-gradient(90deg, var(--accent-green), var(--accent-cyan));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .logo-sub { font-size: 11px; color: var(--text-muted); margin-top: -2px; }
+  .tabs {
+    display: flex; gap: 4px;
+    background: var(--bg-card);
+    border-radius: 10px;
+    padding: 4px;
+    border: 1px solid var(--border);
+  }
+  .tab {
+    padding: 8px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    transition: all 0.2s;
+    border: none; background: none;
+    white-space: nowrap;
+  }
+  .tab:hover { color: var(--text-primary); background: var(--bg-card-hover); }
+  .tab.active {
+    background: var(--accent-green);
+    color: #000;
+    font-weight: 600;
+  }
+
+  .main { padding: 24px 32px; max-width: 1440px; margin: 0 auto; }
+
+  /* Simulator Layout */
+  .sim-layout { display: grid; grid-template-columns: 320px 1fr; gap: 24px; }
+  .sidebar {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    height: fit-content;
+    position: sticky; top: 20px;
+  }
+  .section-title {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text-muted);
+    margin-bottom: 10px;
+    margin-top: 18px;
+  }
+  .section-title:first-child { margin-top: 0; }
+
+  /* Asset Grid */
+  .asset-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .asset-chip {
+    padding: 6px 8px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 500;
+    font-family: 'JetBrains Mono', monospace;
+    transition: all 0.15s;
+    text-align: center;
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+  }
+  .asset-chip:hover { border-color: var(--border-bright); color: var(--text-primary); }
+  .asset-chip.selected {
+    border-color: var(--accent-green);
+    background: rgba(0,255,136,0.08);
+    color: var(--accent-green);
+  }
+  .asset-chip.disabled { opacity: 0.3; cursor: not-allowed; }
+  .category-label {
+    grid-column: 1 / -1;
+    font-size: 10px;
+    color: var(--text-muted);
+    padding: 4px 0 2px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+  }
+
+  /* Strategy selector */
+  .strategy-options { display: flex; flex-direction: column; gap: 6px; }
+  .strategy-btn {
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 12px;
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    transition: all 0.15s;
+    text-align: left;
+    display: flex; flex-direction: column;
+  }
+  .strategy-btn:hover { border-color: var(--border-bright); color: var(--text-primary); }
+  .strategy-btn.selected {
+    border-color: var(--accent-green);
+    background: rgba(0,255,136,0.06);
+    color: var(--text-primary);
+  }
+  .strategy-btn .label { font-weight: 600; font-size: 13px; }
+  .strategy-btn .desc { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+
+  /* Sliders */
+  .slider-group { margin-bottom: 14px; }
+  .slider-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 6px;
+  }
+  .slider-label { font-size: 12px; color: var(--text-secondary); }
+  .slider-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; font-weight: 600;
+    color: var(--accent-green);
+  }
+  input[type="range"] {
+    width: 100%;
+    -webkit-appearance: none;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    outline: none;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px; height: 16px;
+    background: var(--accent-green);
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 0 8px rgba(0,255,136,0.3);
+  }
+  select {
+    width: 100%;
+    padding: 8px 10px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font-size: 12px;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    cursor: pointer;
+  }
+  select:focus { outline: none; border-color: var(--accent-green); }
+
+  /* Period buttons */
+  .period-row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .period-btn {
+    padding: 6px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 500;
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    transition: all 0.15s;
+  }
+  .period-btn:hover { border-color: var(--border-bright); }
+  .period-btn.selected {
+    border-color: var(--accent-green);
+    background: rgba(0,255,136,0.08);
+    color: var(--accent-green);
+  }
+
+  /* Run button */
+  .run-btn {
+    width: 100%;
+    padding: 12px;
+    background: var(--accent-green);
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 700;
+    color: #000;
+    cursor: pointer;
+    margin-top: 20px;
+    transition: all 0.2s;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+  }
+  .run-btn:hover { background: #00ff99; box-shadow: 0 0 20px rgba(0,255,136,0.3); }
+
+  /* Results panel */
+  .results-panel {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    min-height: 500px;
+  }
+  .results-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 20px;
+  }
+  .results-title { font-size: 16px; font-weight: 600; }
+  .chart-container { width: 100%; height: 400px; margin-bottom: 24px; }
+
+  /* Stats grid */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .stat-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+  }
+  .stat-label { font-size: 11px; color: var(--text-muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .stat-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 20px; font-weight: 700;
+  }
+  .stat-value.positive { color: var(--accent-green); }
+  .stat-value.negative { color: var(--accent-red); }
+  .stat-sub { font-size: 10px; color: var(--text-muted); margin-top: 2px; font-family: 'JetBrains Mono', monospace; }
+
+  /* Comparison table */
+  .compare-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  .compare-table th {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border-bright);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+    font-weight: 600;
+  }
+  .compare-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+  }
+  .compare-table tr:hover td { background: var(--bg-card-hover); }
+
+  /* Time Machine */
+  .tm-hero {
+    text-align: center;
+    padding: 40px 20px 30px;
+  }
+  .tm-hero h2 {
+    font-size: 32px; font-weight: 800;
+    background: linear-gradient(135deg, var(--accent-green), var(--accent-cyan), var(--accent-purple));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    margin-bottom: 8px;
+  }
+  .tm-hero p { color: var(--text-secondary); font-size: 14px; max-width: 500px; margin: 0 auto; }
+  .tm-controls {
+    display: flex; gap: 16px; justify-content: center;
+    flex-wrap: wrap;
+    margin: 24px 0;
+  }
+  .tm-control {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 20px;
+    min-width: 200px;
+  }
+  .tm-control label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; display: block; margin-bottom: 8px; font-weight: 600; }
+  .tm-control select, .tm-control input {
+    width: 100%;
+    padding: 10px 12px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font-size: 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+  }
+  .tm-control input:focus { outline: none; border-color: var(--accent-green); }
+
+  .tm-run-btn {
+    padding: 14px 48px;
+    background: linear-gradient(135deg, var(--accent-green), var(--accent-cyan));
+    border: none;
+    border-radius: 10px;
+    font-size: 16px;
+    font-weight: 700;
+    color: #000;
+    cursor: pointer;
+    margin: 20px auto;
+    display: block;
+    transition: all 0.3s;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+  }
+  .tm-run-btn:hover { transform: scale(1.05); box-shadow: 0 0 30px rgba(0,255,136,0.3); }
+
+  /* Time Machine Results */
+  .tm-results { margin-top: 24px; }
+  .tm-podium { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px; max-width: 900px; margin-left: auto; margin-right: auto; }
+  .podium-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .podium-card.gold { border-color: var(--accent-yellow); }
+  .podium-card.gold::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: linear-gradient(90deg, transparent, var(--accent-yellow), transparent);
+  }
+  .podium-card.silver { border-color: var(--text-muted); }
+  .podium-card.bronze { border-color: var(--accent-orange); }
+  .podium-rank { font-size: 28px; font-weight: 800; margin-bottom: 4px; }
+  .podium-rank.gold { color: var(--accent-yellow); }
+  .podium-rank.silver { color: var(--text-muted); }
+  .podium-rank.bronze { color: var(--accent-orange); }
+  .podium-asset { font-size: 14px; font-weight: 700; margin-bottom: 2px; }
+  .podium-strategy { font-size: 11px; color: var(--text-muted); margin-bottom: 8px; }
+  .podium-value { font-family: 'JetBrains Mono', monospace; font-size: 24px; font-weight: 700; color: var(--accent-green); }
+  .podium-return { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+
+  .tm-full-table {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    max-height: 500px;
+    overflow-y: auto;
+  }
+
+  /* Portfolio tab */
+  .portfolio-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 20px; }
+  .portfolio-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+  }
+  .portfolio-card h3 { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+  .portfolio-card .desc { font-size: 12px; color: var(--text-secondary); margin-bottom: 16px; }
+  .alloc-bar { display: flex; height: 24px; border-radius: 4px; overflow: hidden; margin-bottom: 12px; }
+  .alloc-segment { transition: width 0.3s; }
+  .alloc-list { font-size: 11px; }
+  .alloc-item { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; border-bottom: 1px solid var(--border); }
+  .alloc-item .dot { width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; display: inline-block; }
+
+  /* Loading spinner */
+  .loading {
+    display: flex; align-items: center; justify-content: center;
+    height: 300px; flex-direction: column; gap: 12px;
+  }
+  .spinner {
+    width: 40px; height: 40px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent-green);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Empty state */
+  .empty-state {
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    height: 400px; color: var(--text-muted);
+    gap: 12px;
+  }
+  .empty-state .icon { font-size: 48px; opacity: 0.3; }
+  .empty-state .msg { font-size: 14px; }
+
+  /* Event markers */
+  .event-dot {
+    fill: var(--accent-red);
+    cursor: pointer;
+  }
+
+  /* Responsive */
+  @media (max-width: 900px) {
+    .sim-layout { grid-template-columns: 1fr; }
+    .sidebar { position: static; }
+    .tm-podium { grid-template-columns: 1fr; }
+    .header { flex-direction: column; gap: 12px; padding: 16px; }
+    .main { padding: 16px; }
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useMemo, useCallback, useEffect, useRef } = React;
+const {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, ReferenceLine, Area, AreaChart, ComposedChart,
+  Legend, Bar
+} = Recharts;
+
+// ============ CONSTANTS ============
+const ASSET_LIST = ['SPY','QQQ','DIA','IWM','BTC_USD','ETH_USD','GLD','SLV','USO','TLT','EEM','EWY','XLE','SCHD','ARKK'];
+
+const ASSET_COLORS = {
+  SPY:'#00ff88', QQQ:'#4488ff', DIA:'#ffcc00', IWM:'#ff8844',
+  BTC_USD:'#f7931a', ETH_USD:'#627eea', GLD:'#ffd700', SLV:'#c0c0c0',
+  USO:'#8b4513', TLT:'#00ccee', EEM:'#aa66ff', EWY:'#ff4466',
+  XLE:'#44cc44', SCHD:'#ff66aa', ARKK:'#cc44ff'
+};
+
+const BUYHOLD_COLOR = '#ffffff20';
+
+const EVENTS = [
+  { date: '2001-09-11', label: '9/11' },
+  { date: '2008-09-15', label: '2008 Crisis' },
+  { date: '2020-03-11', label: 'COVID Crash' },
+  { date: '2022-01-03', label: '2022 Bear' },
+];
+
+const LIFE_EVENTS = [
+  { label: 'Graduated College (2000)', year: 2000 },
+  { label: 'Graduated College (2005)', year: 2005 },
+  { label: 'Before the 2008 Crash', year: 2007 },
+  { label: 'After the 2008 Crash', year: 2009 },
+  { label: 'Started My Career (2010)', year: 2010 },
+  { label: 'Started Investing (2015)', year: 2015 },
+  { label: 'Before COVID (2019)', year: 2019 },
+  { label: 'COVID Lockdown (2020)', year: 2020 },
+  { label: 'Crypto Bull Run (2021)', year: 2021 },
+  { label: '2022 Bear Market Bottom', year: 2022 },
+];
+
+// ============ ENGINE ============
+function getAssetData(ticker) {
+  const raw = ASSET_DATA[ticker];
+  if (!raw) return null;
+  return { dates: raw.dates, prices: raw.prices, label: raw.label };
+}
+
+function calcSMA(prices, period) {
+  const sma = new Array(prices.length).fill(null);
+  for (let i = period - 1; i < prices.length; i++) {
+    let sum = 0;
+    for (let j = i - period + 1; j <= i; j++) sum += prices[j];
+    sma[i] = sum / period;
+  }
+  return sma;
+}
+
+function calcRSI(prices, period = 14) {
+  const rsi = new Array(prices.length).fill(null);
+  if (prices.length < period + 1) return rsi;
+  let gains = 0, losses = 0;
+  for (let i = 1; i <= period; i++) {
+    const change = prices[i] - prices[i-1];
+    if (change > 0) gains += change; else losses -= change;
+  }
+  let avgGain = gains / period;
+  let avgLoss = losses / period;
+  rsi[period] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
+  for (let i = period + 1; i < prices.length; i++) {
+    const change = prices[i] - prices[i-1];
+    avgGain = (avgGain * (period - 1) + Math.max(change, 0)) / period;
+    avgLoss = (avgLoss * (period - 1) + Math.max(-change, 0)) / period;
+    rsi[i] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
+  }
+  return rsi;
+}
+
+function calcDrawdownFromHigh(prices) {
+  const dd = new Array(prices.length).fill(0);
+  let peak = prices[0];
+  for (let i = 1; i < prices.length; i++) {
+    if (prices[i] > peak) peak = prices[i];
+    dd[i] = (prices[i] - peak) / peak;
+  }
+  return dd;
+}
+
+function findDateIndex(dates, targetDate) {
+  for (let i = 0; i < dates.length; i++) {
+    if (dates[i] >= targetDate) return i;
+  }
+  return dates.length - 1;
+}
+
+function getStartDate(yearsAgo) {
+  const d = new Date();
+  d.setFullYear(d.getFullYear() - yearsAgo);
+  return d.toISOString().split('T')[0];
+}
+
+function getStartDateFromYear(year) {
+  return `${year}-01-01`;
+}
+
+// ============ STRATEGY RUNNERS ============
+// All strategies: given budget per period, buy shares when condition met, track equity curve
+function runStrategy(ticker, strategyType, params, startDate, endDate) {
+  const data = getAssetData(ticker);
+  if (!data) return null;
+
+  const { dates, prices } = data;
+  let si = findDateIndex(dates, startDate);
+  let ei = endDate ? findDateIndex(dates, endDate) : dates.length - 1;
+  if (si >= ei) return null;
+
+  const { budget = 500, frequency = 'monthly', maPeriod = 200, maThreshold = 0,
+    dipThreshold = -5, rsiPeriod = 14, rsiThreshold = 30, drawdownThreshold = -10 } = params;
+
+  // Pre-compute indicators
+  const sma = calcSMA(prices, maPeriod);
+  const rsi = calcRSI(prices, rsiPeriod);
+  const ddFromHigh = calcDrawdownFromHigh(prices);
+
+  let totalShares = 0;
+  let totalInvested = 0;
+  let lastBuyMonth = -1;
+  let lastBuyWeek = -1;
+  const equityCurve = [];
+  const buys = [];
+
+  // Buy & hold baseline
+  const bhStartPrice = prices[si];
+  const bhEquityCurve = [];
+
+  for (let i = si; i <= ei; i++) {
+    const date = dates[i];
+    const price = prices[i];
+    const d = new Date(date);
+    const month = d.getFullYear() * 12 + d.getMonth();
+    const week = Math.floor(d.getTime() / (7 * 86400000));
+
+    let shouldBuy = false;
+    let buyAmount = budget;
+
+    if (strategyType === 'dca') {
+      if (frequency === 'daily') {
+        shouldBuy = true;
+        buyAmount = budget / 21; // ~21 trading days/month
+      } else if (frequency === 'weekly') {
+        if (week !== lastBuyWeek) { shouldBuy = true; buyAmount = budget / 4.33; lastBuyWeek = week; }
+      } else { // monthly
+        if (month !== lastBuyMonth) { shouldBuy = true; lastBuyMonth = month; }
+      }
+    } else if (strategyType === 'ma') {
+      if (month !== lastBuyMonth && sma[i] !== null) {
+        lastBuyMonth = month;
+        const pctBelowMA = (price - sma[i]) / sma[i] * 100;
+        if (pctBelowMA <= maThreshold) {
+          shouldBuy = true;
+          // More aggressive buying when further below MA
+          const intensity = Math.min(3, 1 + Math.abs(pctBelowMA - maThreshold) / 10);
+          buyAmount = budget * intensity;
+        }
+      }
+    } else if (strategyType === 'dip') {
+      if (month !== lastBuyMonth) {
+        lastBuyMonth = month;
+        const ddPct = ddFromHigh[i] * 100;
+        const curRSI = rsi[i];
+        const dipCondition = ddPct <= dipThreshold;
+        const rsiCondition = curRSI !== null && curRSI <= rsiThreshold;
+        if (dipCondition || rsiCondition) {
+          shouldBuy = true;
+          const intensity = Math.min(3, 1 + Math.abs(ddPct) / 15);
+          buyAmount = budget * intensity;
+        } else {
+          // Still invest a small base amount
+          shouldBuy = true;
+          buyAmount = budget * 0.3;
+        }
+      }
+    } else if (strategyType === 'hybrid') {
+      if (month !== lastBuyMonth) {
+        lastBuyMonth = month;
+        shouldBuy = true; // Always buy (DCA base)
+        buyAmount = budget * 0.5; // 50% as base DCA
+        // Extra buying on dips & below MA
+        const ddPct = ddFromHigh[i] * 100;
+        const curRSI = rsi[i];
+        if (sma[i] !== null && price < sma[i]) buyAmount += budget * 0.25;
+        if (ddPct <= dipThreshold) buyAmount += budget * 0.5;
+        if (curRSI !== null && curRSI <= rsiThreshold) buyAmount += budget * 0.25;
+      }
+    }
+
+    if (shouldBuy && buyAmount > 0) {
+      const shares = buyAmount / price;
+      totalShares += shares;
+      totalInvested += buyAmount;
+      buys.push({ date, price, amount: buyAmount, shares });
+    }
+
+    const currentValue = totalShares * price;
+    const bhValue = totalInvested > 0 ? (totalInvested / bhStartPrice) * price : 0;
+
+    equityCurve.push({
+      date,
+      value: Math.round(currentValue * 100) / 100,
+      invested: Math.round(totalInvested * 100) / 100,
+      buyHold: Math.round(bhValue * 100) / 100,
+      price
+    });
+  }
+
+  if (equityCurve.length === 0 || totalInvested === 0) return null;
+
+  const finalValue = equityCurve[equityCurve.length - 1].value;
+  const totalReturn = ((finalValue - totalInvested) / totalInvested) * 100;
+
+  // CAGR
+  const years = (new Date(dates[ei]) - new Date(dates[si])) / (365.25 * 86400000);
+  const cagr = years > 0 ? (Math.pow(finalValue / totalInvested, 1 / years) - 1) * 100 : 0;
+
+  // Max drawdown of equity curve
+  let peak = 0, maxDD = 0;
+  for (const pt of equityCurve) {
+    if (pt.value > peak) peak = pt.value;
+    const dd = peak > 0 ? (pt.value - peak) / peak : 0;
+    if (dd < maxDD) maxDD = dd;
+  }
+
+  // Buy & Hold stats
+  const bhFinal = equityCurve[equityCurve.length - 1].buyHold;
+  const bhReturn = totalInvested > 0 ? ((bhFinal - totalInvested) / totalInvested) * 100 : 0;
+
+  const avgCostBasis = totalShares > 0 ? totalInvested / totalShares : 0;
+
+  return {
+    ticker,
+    label: data.label,
+    equityCurve,
+    buys,
+    totalInvested,
+    finalValue,
+    totalReturn,
+    cagr,
+    maxDrawdown: maxDD * 100,
+    avgCostBasis,
+    totalShares,
+    bhFinal,
+    bhReturn,
+    years,
+    numBuys: buys.length,
+    strategyType,
+    params
+  };
+}
+
+// ============ FORMAT HELPERS ============
+const fmt = (n) => {
+  if (Math.abs(n) >= 1e6) return '$' + (n/1e6).toFixed(2) + 'M';
+  if (Math.abs(n) >= 1e3) return '$' + (n/1e3).toFixed(1) + 'K';
+  return '$' + n.toFixed(2);
+};
+const fmtPct = (n) => (n >= 0 ? '+' : '') + n.toFixed(2) + '%';
+const fmtNum = (n) => n.toLocaleString(undefined, {maximumFractionDigits: 2});
+
+// ============ COMPONENTS ============
+
+// --- Stat Card ---
+function StatCard({ label, value, sub, positive }) {
+  return (
+    <div className="stat-card">
+      <div className="stat-label">{label}</div>
+      <div className={`stat-value ${positive === true ? 'positive' : positive === false ? 'negative' : ''}`}>
+        {value}
+      </div>
+      {sub && <div className="stat-sub">{sub}</div>}
+    </div>
+  );
+}
+
+// --- Chart with events ---
+function EquityChart({ results, showBuyHold = true }) {
+  if (!results || results.length === 0) return null;
+
+  // Merge equity curves by date
+  const dateMap = {};
+  results.forEach(r => {
+    r.equityCurve.forEach(pt => {
+      if (!dateMap[pt.date]) dateMap[pt.date] = { date: pt.date };
+      dateMap[pt.date][r.ticker] = pt.value;
+      if (showBuyHold) dateMap[pt.date][r.ticker + '_bh'] = pt.buyHold;
+      dateMap[pt.date][r.ticker + '_inv'] = pt.invested;
+    });
+  });
+
+  const chartData = Object.values(dateMap).sort((a, b) => a.date.localeCompare(b.date));
+
+  // Sample data if too many points
+  let sampled = chartData;
+  if (chartData.length > 600) {
+    const step = Math.ceil(chartData.length / 600);
+    sampled = chartData.filter((_, i) => i % step === 0 || i === chartData.length - 1);
+  }
+
+  const formatDate = (d) => {
+    if (!d) return '';
+    const parts = d.split('-');
+    return parts[1] + '/' + parts[0].slice(2);
+  };
+
+  const formatTooltipDate = (d) => {
+    if (!d) return '';
+    return new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  };
+
+  return (
+    <div className="chart-container">
+      <ResponsiveContainer width="100%" height="100%">
+        <ComposedChart data={sampled} margin={{ top: 5, right: 20, bottom: 5, left: 10 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#1a1a2e" />
+          <XAxis dataKey="date" tickFormatter={formatDate} tick={{ fill: '#555570', fontSize: 10 }}
+            interval={Math.floor(sampled.length / 8)} />
+          <YAxis tick={{ fill: '#555570', fontSize: 10 }} tickFormatter={v => fmt(v)}
+            width={70} />
+          <Tooltip
+            contentStyle={{ background: '#0d0d14', border: '1px solid #252540', borderRadius: 8, fontSize: 12 }}
+            labelFormatter={formatTooltipDate}
+            formatter={(value, name) => {
+              if (name.includes('_bh')) return [fmt(value), 'Buy & Hold'];
+              if (name.includes('_inv')) return [fmt(value), 'Total Invested'];
+              const ticker = name;
+              const label = ASSET_DATA[ticker]?.label || ticker;
+              return [fmt(value), label + ' Strategy'];
+            }}
+          />
+          {results.map(r => (
+            <React.Fragment key={r.ticker}>
+              {showBuyHold && (
+                <Line type="monotone" dataKey={r.ticker + '_bh'} stroke="#ffffff15"
+                  strokeWidth={1} dot={false} strokeDasharray="4 4" />
+              )}
+              <Line type="monotone" dataKey={r.ticker + '_inv'} stroke="#ffffff08"
+                strokeWidth={1} dot={false} strokeDasharray="2 2" />
+              <Line type="monotone" dataKey={r.ticker} stroke={ASSET_COLORS[r.ticker]}
+                strokeWidth={2.5} dot={false} />
+            </React.Fragment>
+          ))}
+          {EVENTS.map(e => {
+            const hasEvent = sampled.some(d => d.date >= e.date);
+            if (!hasEvent) return null;
+            return <ReferenceLine key={e.date} x={e.date} stroke="#ff446640" strokeDasharray="3 3"
+              label={{ value: e.label, position: 'top', fill: '#ff446680', fontSize: 9 }} />;
+          })}
+        </ComposedChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+// --- Asset Selector ---
+function AssetSelector({ selected, onChange, max = 4 }) {
+  const toggle = (ticker) => {
+    if (selected.includes(ticker)) {
+      onChange(selected.filter(t => t !== ticker));
+    } else if (selected.length < max) {
+      onChange([...selected, ticker]);
+    }
+  };
+
+  return (
+    <div className="asset-grid">
+      {Object.entries(CATEGORIES).map(([cat, tickers]) => (
+        <React.Fragment key={cat}>
+          <div className="category-label">{cat}</div>
+          {tickers.map(t => {
+            const isSel = selected.includes(t);
+            const isDisabled = !isSel && selected.length >= max;
+            return (
+              <div key={t}
+                className={`asset-chip ${isSel ? 'selected' : ''} ${isDisabled ? 'disabled' : ''}`}
+                onClick={() => !isDisabled && toggle(t)}
+              >
+                {t.replace('_', '/')}
+              </div>
+            );
+          })}
+        </React.Fragment>
+      ))}
+    </div>
+  );
+}
+
+// ============ TAB 1: STRATEGY SIMULATOR ============
+function StrategySimulator() {
+  const [assets, setAssets] = useState(['SPY']);
+  const [strategy, setStrategy] = useState('dca');
+  const [frequency, setFrequency] = useState('monthly');
+  const [budget, setBudget] = useState(500);
+  const [maPeriod, setMaPeriod] = useState(200);
+  const [maThreshold, setMaThreshold] = useState(0);
+  const [dipThreshold, setDipThreshold] = useState(-10);
+  const [rsiThreshold, setRsiThreshold] = useState(30);
+  const [drawdownThreshold, setDrawdownThreshold] = useState(-15);
+  const [periodYears, setPeriodYears] = useState(10);
+  const [results, setResults] = useState(null);
+  const [computing, setComputing] = useState(false);
+
+  const runSim = useCallback(() => {
+    setComputing(true);
+    setTimeout(() => {
+      const startDate = getStartDate(periodYears);
+      const res = assets.map(ticker =>
+        runStrategy(ticker, strategy, {
+          budget, frequency, maPeriod, maThreshold: maThreshold / 100 * 100,
+          dipThreshold, rsiThreshold, drawdownThreshold
+        }, startDate, null)
+      ).filter(Boolean);
+      setResults(res);
+      setComputing(false);
+    }, 50);
+  }, [assets, strategy, frequency, budget, maPeriod, maThreshold, dipThreshold, rsiThreshold, drawdownThreshold, periodYears]);
+
+  const strategyName = (s) => ({
+    dca: 'Dollar-Cost Averaging',
+    ma: 'Moving Average',
+    dip: 'Dip Buying',
+    hybrid: 'Hybrid'
+  }[s]);
+
+  return (
+    <div className="sim-layout">
+      <div className="sidebar">
+        <div className="section-title">Select Assets (max 4)</div>
+        <AssetSelector selected={assets} onChange={setAssets} max={4} />
+
+        <div className="section-title">Strategy</div>
+        <div className="strategy-options">
+          {[
+            { id: 'dca', label: 'DCA', desc: 'Buy on a fixed schedule' },
+            { id: 'ma', label: 'Moving Average', desc: 'Buy below the MA line' },
+            { id: 'dip', label: 'Dip Buying', desc: 'Buy on drawdowns & low RSI' },
+            { id: 'hybrid', label: 'Hybrid', desc: 'DCA + extra on dips & below MA' },
+          ].map(s => (
+            <div key={s.id} className={`strategy-btn ${strategy === s.id ? 'selected' : ''}`}
+              onClick={() => setStrategy(s.id)}>
+              <span className="label">{s.label}</span>
+              <span className="desc">{s.desc}</span>
+            </div>
+          ))}
+        </div>
+
+        <div className="section-title">Parameters</div>
+
+        <div className="slider-group">
+          <div className="slider-header">
+            <span className="slider-label">Monthly Budget</span>
+            <span className="slider-value">${budget}</span>
+          </div>
+          <input type="range" min="100" max="5000" step="100" value={budget}
+            onChange={e => setBudget(+e.target.value)} />
+        </div>
+
+        {strategy === 'dca' && (
+          <div className="slider-group">
+            <div className="slider-header"><span className="slider-label">Frequency</span></div>
+            <select value={frequency} onChange={e => setFrequency(e.target.value)}>
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+            </select>
+          </div>
+        )}
+
+        {(strategy === 'ma' || strategy === 'hybrid') && (
+          <>
+            <div className="slider-group">
+              <div className="slider-header">
+                <span className="slider-label">MA Period</span>
+                <span className="slider-value">{maPeriod} days</span>
+              </div>
+              <input type="range" min="10" max="300" step="10" value={maPeriod}
+                onChange={e => setMaPeriod(+e.target.value)} />
+            </div>
+            {strategy === 'ma' && (
+              <div className="slider-group">
+                <div className="slider-header">
+                  <span className="slider-label">Buy when price is below MA by</span>
+                  <span className="slider-value">{maThreshold}%</span>
+                </div>
+                <input type="range" min="-20" max="5" step="1" value={maThreshold}
+                  onChange={e => setMaThreshold(+e.target.value)} />
+              </div>
+            )}
+          </>
+        )}
+
+        {(strategy === 'dip' || strategy === 'hybrid') && (
+          <>
+            <div className="slider-group">
+              <div className="slider-header">
+                <span className="slider-label">Drawdown Threshold</span>
+                <span className="slider-value">{dipThreshold}%</span>
+              </div>
+              <input type="range" min="-40" max="-3" step="1" value={dipThreshold}
+                onChange={e => setDipThreshold(+e.target.value)} />
+            </div>
+            <div className="slider-group">
+              <div className="slider-header">
+                <span className="slider-label">RSI Threshold</span>
+                <span className="slider-value">{rsiThreshold}</span>
+              </div>
+              <input type="range" min="15" max="50" step="1" value={rsiThreshold}
+                onChange={e => setRsiThreshold(+e.target.value)} />
+            </div>
+          </>
+        )}
+
+        <div className="section-title">Time Period</div>
+        <div className="period-row">
+          {[25, 20, 15, 10, 5, 3].map(y => (
+            <div key={y} className={`period-btn ${periodYears === y ? 'selected' : ''}`}
+              onClick={() => setPeriodYears(y)}>
+              {y}Y
+            </div>
+          ))}
+        </div>
+
+        <button className="run-btn" onClick={runSim}>
+          ▶ Run Simulation
+        </button>
+      </div>
+
+      <div className="results-panel">
+        {computing ? (
+          <div className="loading"><div className="spinner"></div><span style={{color:'var(--text-muted)', fontSize:13}}>Computing strategies...</span></div>
+        ) : !results ? (
+          <div className="empty-state">
+            <div className="icon">📊</div>
+            <div className="msg">Select assets, configure your strategy, and hit Run</div>
+          </div>
+        ) : (
+          <>
+            <div className="results-header">
+              <div className="results-title">
+                {strategyName(strategy)} — {periodYears} Year Backtest
+              </div>
+            </div>
+
+            <EquityChart results={results} showBuyHold={true} />
+
+            {results.map(r => (
+              <div key={r.ticker} style={{ marginBottom: 24 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                  <div style={{ width: 12, height: 12, borderRadius: 3, background: ASSET_COLORS[r.ticker] }}></div>
+                  <span style={{ fontWeight: 700, fontSize: 15 }}>{r.label}</span>
+                  <span style={{ color: 'var(--text-muted)', fontSize: 12, fontFamily: 'JetBrains Mono' }}>
+                    {r.ticker.replace('_','/')}
+                  </span>
+                </div>
+                <div className="stats-grid">
+                  <StatCard label="Final Value" value={fmt(r.finalValue)}
+                    sub={`Invested: ${fmt(r.totalInvested)}`}
+                    positive={r.finalValue > r.totalInvested} />
+                  <StatCard label="Total Return" value={fmtPct(r.totalReturn)}
+                    sub={`Buy & Hold: ${fmtPct(r.bhReturn)}`}
+                    positive={r.totalReturn > 0} />
+                  <StatCard label="CAGR" value={fmtPct(r.cagr)}
+                    positive={r.cagr > 0} />
+                  <StatCard label="Max Drawdown" value={fmtPct(r.maxDrawdown)}
+                    positive={false} />
+                  <StatCard label="Avg Cost Basis" value={'$' + fmtNum(r.avgCostBasis)}
+                    sub={`${fmtNum(r.totalShares)} shares`} />
+                  <StatCard label="Purchases" value={r.numBuys.toString()}
+                    sub={`Over ${r.years.toFixed(1)} years`} />
+                </div>
+              </div>
+            ))}
+
+            {results.length > 1 && (
+              <>
+                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Comparison</div>
+                <table className="compare-table">
+                  <thead>
+                    <tr>
+                      <th>Asset</th>
+                      <th>Final Value</th>
+                      <th>Total Return</th>
+                      <th>CAGR</th>
+                      <th>Max DD</th>
+                      <th>vs Buy&Hold</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {results.sort((a, b) => b.finalValue - a.finalValue).map(r => (
+                      <tr key={r.ticker}>
+                        <td style={{ color: ASSET_COLORS[r.ticker], fontWeight: 600 }}>
+                          {r.label}
+                        </td>
+                        <td style={{ color: 'var(--accent-green)' }}>{fmt(r.finalValue)}</td>
+                        <td style={{ color: r.totalReturn > 0 ? 'var(--accent-green)' : 'var(--accent-red)' }}>
+                          {fmtPct(r.totalReturn)}
+                        </td>
+                        <td>{fmtPct(r.cagr)}</td>
+                        <td style={{ color: 'var(--accent-red)' }}>{fmtPct(r.maxDrawdown)}</td>
+                        <td style={{ color: r.totalReturn > r.bhReturn ? 'var(--accent-green)' : 'var(--accent-red)' }}>
+                          {r.totalReturn > r.bhReturn ? '▲' : '▼'} {Math.abs(r.totalReturn - r.bhReturn).toFixed(1)}%
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ============ TAB 2: TIME MACHINE ============
+function TimeMachine() {
+  const [selectedEvent, setSelectedEvent] = useState(0);
+  const [customYear, setCustomYear] = useState('');
+  const [budget, setBudget] = useState(500);
+  const [results, setResults] = useState(null);
+  const [computing, setComputing] = useState(false);
+
+  const runTimeMachine = () => {
+    setComputing(true);
+    setTimeout(() => {
+      const year = customYear ? parseInt(customYear) : LIFE_EVENTS[selectedEvent].year;
+      const startDate = getStartDateFromYear(year);
+      const strategies = [
+        { type: 'dca', label: 'Monthly DCA', params: { budget, frequency: 'monthly' } },
+        { type: 'dca', label: 'Weekly DCA', params: { budget, frequency: 'weekly' } },
+        { type: 'ma', label: 'MA200 Strategy', params: { budget, maPeriod: 200, maThreshold: 0 } },
+        { type: 'ma', label: 'MA50 Aggressive', params: { budget, maPeriod: 50, maThreshold: -5 } },
+        { type: 'dip', label: 'Dip Buy -10%', params: { budget, dipThreshold: -10, rsiThreshold: 30 } },
+        { type: 'dip', label: 'Dip Buy -20%', params: { budget, dipThreshold: -20, rsiThreshold: 25 } },
+        { type: 'hybrid', label: 'Hybrid Strategy', params: { budget, maPeriod: 200, dipThreshold: -10, rsiThreshold: 30 } },
+      ];
+
+      const allResults = [];
+      ASSET_LIST.forEach(ticker => {
+        strategies.forEach(s => {
+          const res = runStrategy(ticker, s.type, s.params, startDate, null);
+          if (res) {
+            allResults.push({ ...res, strategyLabel: s.label });
+          }
+        });
+      });
+
+      allResults.sort((a, b) => b.finalValue - a.finalValue);
+      setResults({ allResults, year, budget });
+      setComputing(false);
+    }, 100);
+  };
+
+  return (
+    <div>
+      <div className="tm-hero">
+        <h2>⏰ Time Machine</h2>
+        <p>Pick a moment in your past. See what every strategy would be worth today.</p>
+      </div>
+
+      <div className="tm-controls">
+        <div className="tm-control">
+          <label>Life Event</label>
+          <select value={selectedEvent} onChange={e => { setSelectedEvent(+e.target.value); setCustomYear(''); }}>
+            {LIFE_EVENTS.map((e, i) => (
+              <option key={i} value={i}>{e.label}</option>
+            ))}
+          </select>
+        </div>
+        <div className="tm-control">
+          <label>Or Custom Year</label>
+          <input type="number" min="1998" max="2025" placeholder="e.g. 2015"
+            value={customYear} onChange={e => setCustomYear(e.target.value)} />
+        </div>
+        <div className="tm-control">
+          <label>Monthly Budget</label>
+          <select value={budget} onChange={e => setBudget(+e.target.value)}>
+            {[100, 200, 300, 500, 1000, 2000, 5000].map(b => (
+              <option key={b} value={b}>${b}/mo</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <button className="tm-run-btn" onClick={runTimeMachine}>
+        🚀 Calculate All Strategies
+      </button>
+
+      {computing && (
+        <div className="loading"><div className="spinner"></div><span style={{color:'var(--text-muted)', fontSize:13}}>Testing {ASSET_LIST.length * 7} combinations...</span></div>
+      )}
+
+      {results && !computing && (
+        <div className="tm-results">
+          <div style={{ textAlign: 'center', color: 'var(--text-secondary)', fontSize: 13, marginBottom: 20 }}>
+            Starting from <span style={{ color: 'var(--accent-green)', fontWeight: 700 }}>{results.year}</span> with <span style={{ color: 'var(--accent-green)', fontWeight: 700 }}>${results.budget}/month</span> — {results.allResults.length} strategy combinations tested
+          </div>
+
+          {/* Podium */}
+          <div className="tm-podium">
+            {results.allResults.slice(0, 3).map((r, i) => (
+              <div key={i} className={`podium-card ${['gold','silver','bronze'][i]}`}>
+                <div className={`podium-rank ${['gold','silver','bronze'][i]}`}>
+                  {['🥇','🥈','🥉'][i]}
+                </div>
+                <div className="podium-asset">{r.label}</div>
+                <div className="podium-strategy">{r.strategyLabel}</div>
+                <div className="podium-value">{fmt(r.finalValue)}</div>
+                <div className="podium-return">
+                  {fmtPct(r.totalReturn)} return · Invested {fmt(r.totalInvested)}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Top 3 equity chart */}
+          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12, padding: 20, marginBottom: 20 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Top 3 Equity Curves</div>
+            <EquityChart results={results.allResults.slice(0, 3)} showBuyHold={false} />
+          </div>
+
+          {/* Full table */}
+          <div className="tm-full-table">
+            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>All Results (Top 50)</div>
+            <table className="compare-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Asset</th>
+                  <th>Strategy</th>
+                  <th>Final Value</th>
+                  <th>Invested</th>
+                  <th>Return</th>
+                  <th>CAGR</th>
+                  <th>Max DD</th>
+                </tr>
+              </thead>
+              <tbody>
+                {results.allResults.slice(0, 50).map((r, i) => (
+                  <tr key={i}>
+                    <td style={{ color: i < 3 ? 'var(--accent-yellow)' : 'var(--text-muted)' }}>{i + 1}</td>
+                    <td style={{ color: ASSET_COLORS[r.ticker], fontWeight: 600 }}>{r.label}</td>
+                    <td>{r.strategyLabel}</td>
+                    <td style={{ color: 'var(--accent-green)', fontWeight: 600 }}>{fmt(r.finalValue)}</td>
+                    <td style={{ color: 'var(--text-secondary)' }}>{fmt(r.totalInvested)}</td>
+                    <td style={{ color: r.totalReturn > 0 ? 'var(--accent-green)' : 'var(--accent-red)' }}>
+                      {fmtPct(r.totalReturn)}
+                    </td>
+                    <td>{fmtPct(r.cagr)}</td>
+                    <td style={{ color: 'var(--accent-red)' }}>{fmtPct(r.maxDrawdown)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============ TAB 3: BEST PORTFOLIOS ============
+function BestPortfolios() {
+  const [period, setPeriod] = useState(10);
+  const [results, setResults] = useState(null);
+  const [computing, setComputing] = useState(false);
+
+  const PORTFOLIO_COLORS = ['#00ff88','#4488ff','#ffcc00','#ff8844','#f7931a','#627eea','#ffd700','#00ccee','#aa66ff','#ff4466','#44cc44','#ff66aa','#cc44ff','#c0c0c0','#8b4513'];
+
+  const runAnalysis = () => {
+    setComputing(true);
+    setTimeout(() => {
+      const startDate = getStartDate(period);
+
+      // Run DCA on all assets, then find best combos
+      const assetResults = {};
+      ASSET_LIST.forEach(ticker => {
+        const res = runStrategy(ticker, 'dca', { budget: 500, frequency: 'monthly' }, startDate, null);
+        if (res) assetResults[ticker] = res;
+      });
+
+      const available = Object.keys(assetResults);
+      if (available.length === 0) {
+        setResults(null);
+        setComputing(false);
+        return;
+      }
+
+      // Sort by different metrics
+      const byReturn = [...available].sort((a, b) => assetResults[b].totalReturn - assetResults[a].totalReturn);
+      const byLowDD = [...available].sort((a, b) => assetResults[b].maxDrawdown - assetResults[a].maxDrawdown); // less negative = better
+      const bySharpe = [...available].sort((a, b) => {
+        const sharpeA = assetResults[a].maxDrawdown !== 0 ? assetResults[a].cagr / Math.abs(assetResults[a].maxDrawdown) : 0;
+        const sharpeB = assetResults[b].maxDrawdown !== 0 ? assetResults[b].cagr / Math.abs(assetResults[b].maxDrawdown) : 0;
+        return sharpeB - sharpeA;
+      });
+
+      // Build portfolios
+      const buildPortfolio = (ranked, name, desc) => {
+        const top5 = ranked.slice(0, 5);
+        const allocations = top5.map((ticker, i) => ({
+          ticker,
+          label: assetResults[ticker].label,
+          weight: [35, 25, 20, 12, 8][i],
+          color: PORTFOLIO_COLORS[ASSET_LIST.indexOf(ticker)],
+          ...assetResults[ticker]
+        }));
+        // Weighted portfolio return
+        const weightedReturn = allocations.reduce((sum, a) => sum + a.totalReturn * a.weight / 100, 0);
+        const weightedCAGR = allocations.reduce((sum, a) => sum + a.cagr * a.weight / 100, 0);
+        return { name, desc, allocations, weightedReturn, weightedCAGR };
+      };
+
+      setResults({
+        maxReturn: buildPortfolio(byReturn, '🚀 Maximum Returns', 'Optimized for highest total return'),
+        bestSharpe: buildPortfolio(bySharpe, '⚖️ Best Risk-Adjusted', 'Best return per unit of drawdown risk'),
+        lowestDD: buildPortfolio(byLowDD, '🛡️ Lowest Drawdown', 'Minimizes portfolio drawdown'),
+        individual: available.map(t => assetResults[t]).sort((a, b) => b.totalReturn - a.totalReturn)
+      });
+      setComputing(false);
+    }, 100);
+  };
+
+  useEffect(() => { runAnalysis(); }, [period]);
+
+  return (
+    <div>
+      <div style={{ textAlign: 'center', padding: '30px 0 20px' }}>
+        <h2 style={{ fontSize: 28, fontWeight: 800, marginBottom: 8, color: 'var(--text-primary)' }}>
+          Best Portfolios
+        </h2>
+        <p style={{ color: 'var(--text-secondary)', fontSize: 14, marginBottom: 20 }}>
+          Pre-calculated optimal asset allocations based on $500/mo monthly DCA
+        </p>
+        <div className="period-row" style={{ justifyContent: 'center' }}>
+          {[25, 20, 15, 10, 5, 3].map(y => (
+            <div key={y} className={`period-btn ${period === y ? 'selected' : ''}`}
+              onClick={() => setPeriod(y)}>
+              {y}Y
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {computing ? (
+        <div className="loading"><div className="spinner"></div></div>
+      ) : results && (
+        <>
+          <div className="portfolio-grid">
+            {[results.maxReturn, results.bestSharpe, results.lowestDD].map((p, pi) => (
+              <div key={pi} className="portfolio-card">
+                <h3>{p.name}</h3>
+                <div className="desc">{p.desc}</div>
+                <div style={{ fontFamily: 'JetBrains Mono', fontSize: 20, fontWeight: 700, color: 'var(--accent-green)', marginBottom: 4 }}>
+                  {fmtPct(p.weightedReturn)} return
+                </div>
+                <div style={{ fontFamily: 'JetBrains Mono', fontSize: 12, color: 'var(--text-secondary)', marginBottom: 16 }}>
+                  CAGR: {fmtPct(p.weightedCAGR)}
+                </div>
+                <div className="alloc-bar">
+                  {p.allocations.map((a, i) => (
+                    <div key={i} className="alloc-segment"
+                      style={{ width: a.weight + '%', background: a.color }}
+                      title={`${a.label}: ${a.weight}%`} />
+                  ))}
+                </div>
+                <div className="alloc-list">
+                  {p.allocations.map((a, i) => (
+                    <div key={i} className="alloc-item">
+                      <span>
+                        <span className="dot" style={{ background: a.color }}></span>
+                        {a.label}
+                      </span>
+                      <span style={{ fontFamily: 'JetBrains Mono', fontWeight: 600 }}>
+                        {a.weight}% · {fmtPct(a.totalReturn)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Individual asset leaderboard */}
+          <div style={{ marginTop: 24, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12, padding: 20 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Individual Asset Rankings ({period}Y DCA)</div>
+            <table className="compare-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Asset</th>
+                  <th>Final Value</th>
+                  <th>Invested</th>
+                  <th>Return</th>
+                  <th>CAGR</th>
+                  <th>Max DD</th>
+                </tr>
+              </thead>
+              <tbody>
+                {results.individual.map((r, i) => (
+                  <tr key={r.ticker}>
+                    <td style={{ color: i < 3 ? 'var(--accent-yellow)' : 'var(--text-muted)' }}>{i + 1}</td>
+                    <td style={{ color: ASSET_COLORS[r.ticker], fontWeight: 600 }}>{r.label}</td>
+                    <td style={{ color: 'var(--accent-green)', fontWeight: 600 }}>{fmt(r.finalValue)}</td>
+                    <td style={{ color: 'var(--text-secondary)' }}>{fmt(r.totalInvested)}</td>
+                    <td style={{ color: r.totalReturn > 0 ? 'var(--accent-green)' : 'var(--accent-red)' }}>
+                      {fmtPct(r.totalReturn)}
+                    </td>
+                    <td>{fmtPct(r.cagr)}</td>
+                    <td style={{ color: 'var(--accent-red)' }}>{fmtPct(r.maxDrawdown)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ============ APP ============
+function App() {
+  const [tab, setTab] = useState(0);
+
+  return (
+    <div>
+      <div className="header">
+        <div className="logo">
+          <div className="logo-icon">SL</div>
+          <div>
+            <div className="logo-text">Strategy Lab</div>
+            <div className="logo-sub">Multi-Asset Investment Simulator</div>
+          </div>
+        </div>
+        <div className="tabs">
+          {['📊 Strategy Simulator', '⏰ Time Machine', '🏆 Best Portfolios'].map((t, i) => (
+            <button key={i} className={`tab ${tab === i ? 'active' : ''}`}
+              onClick={() => setTab(i)}>
+              {t}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="main">
+        {tab === 0 && <StrategySimulator />}
+        {tab === 1 && <TimeMachine />}
+        {tab === 2 && <BestPortfolios />}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.render(<App />, document.getElementById('root'));
+</script>
+</body>
+</html>
