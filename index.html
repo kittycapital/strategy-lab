@@ -14,7 +14,7 @@
 :root{
   --bg0:#000;--bg1:#07070d;--bg2:#0d0d16;--bg3:#13131f;--bg4:#1a1a2a;
   --bdr:#1a1a2e;--bdr2:#282845;
-  --t1:#e8e8f0;--t2:#9090a8;--t3:#606078;--t4:#404058;
+  --t1:#e8e8f0;--t2:#b0b0c8;--t3:#8888a0;--t4:#686880;
   --g:#00ff88;--gd:#00cc6a;--r:#ff4466;--b:#4488ff;--y:#ffcc00;--p:#aa66ff;--c:#00ccee;--o:#ff8844;
 }
 body{background:var(--bg0);color:var(--t1);font-family:'Noto Sans KR',system-ui,sans-serif;overflow-x:hidden}
@@ -137,11 +137,11 @@ const KR_LABELS={
 };
 
 const KR_CHIPS={
-  SPY:'SPY\nS&P 500',QQQ:'QQQ\n나스닥',DIA:'DIA\n다우',IWM:'IWM\n러셀',
-  BTC_USD:'BTC\n비트코인',ETH_USD:'ETH\n이더리움',
-  GLD:'GLD\n금',SLV:'SLV\n은',USO:'USO\n원유',
-  TLT:'TLT\n미국채',EEM:'EEM\n신흥국',EWY:'EWY\n한국',
-  XLE:'XLE\n에너지',SCHD:'SCHD\n배당',ARKK:'ARKK\n혁신'
+  SPY:'S&P 500 (SPY)',QQQ:'나스닥 100 (QQQ)',DIA:'다우존스 (DIA)',IWM:'러셀 2000 (IWM)',
+  BTC_USD:'비트코인 (BTC)',ETH_USD:'이더리움 (ETH)',
+  GLD:'금 (GLD)',SLV:'은 (SLV)',USO:'원유 (USO)',
+  TLT:'미국채 20년 (TLT)',EEM:'신흥국 (EEM)',EWY:'한국 (EWY)',
+  XLE:'에너지 (XLE)',SCHD:'배당 ETF (SCHD)',ARKK:'ARKK 혁신'
 };
 
 const KR_CATS={'미국 지수':['SPY','QQQ','DIA','IWM'],'암호화폐':['BTC_USD','ETH_USD'],'원자재':['GLD','SLV','USO'],'채권':['TLT'],'해외':['EEM','EWY'],'섹터/테마':['XLE','SCHD','ARKK']};
@@ -401,7 +401,7 @@ function AssetSel(props){
     elements.push(React.createElement('div',{key:'cat_'+cat,className:'catlbl'},cat));
     tickers.forEach(function(t){
       var on=sel.indexOf(t)>=0,dis=!on&&sel.length>=max;
-      elements.push(React.createElement('div',{key:t,className:'achip'+(on?' on':'')+(dis?' dis':''),onClick:function(){if(!dis)toggle(t);},style:{lineHeight:'1.3',padding:'6px 4px',fontSize:9}},KR_CHIPS[t]));
+      elements.push(React.createElement('div',{key:t,className:'achip'+(on?' on':'')+(dis?' dis':''),onClick:function(){if(!dis)toggle(t);},style:{fontSize:10,padding:'7px 4px'}},KR_CHIPS[t]));
     });
   });
   return React.createElement('div',{className:'agrid'},elements);
@@ -637,11 +637,135 @@ function TimeMachine(){
 }
 
 /* ===== 탭 3: 최적 포트폴리오 ===== */
+function ComparisonChart(props){
+  var portfolios=props.portfolios,height=props.height||340;
+  var canRef=useRef(null),wRef=useRef(null);
+  var s1=useState(null),tip=s1[0],setTip=s1[1];
+  useEffect(function(){
+    if(!canRef.current||!wRef.current||!portfolios||!portfolios.length)return;
+    var c=canRef.current,wrap=wRef.current;
+    var w=wrap.clientWidth,h=height;
+    var dpr=window.devicePixelRatio||1;
+    c.width=w*dpr;c.height=h*dpr;c.style.width=w+'px';c.style.height=h+'px';
+    var ctx=c.getContext('2d');ctx.scale(dpr,dpr);
+    var pad={t:16,r:16,b:30,l:66};
+    var cw=w-pad.l-pad.r,ch=h-pad.t-pad.b;
+    if(cw<40||ch<40)return;
+    // Y range across all portfolios
+    var yMin=Infinity,yMax=-Infinity;
+    portfolios.forEach(function(p){p.pfCurve.forEach(function(v){if(v<yMin)yMin=v;if(v>yMax)yMax=v;});});
+    if(yMin===yMax){yMin*=0.9;yMax*=1.1;}
+    var yP2=(yMax-yMin)*0.08;yMin=Math.max(0,yMin-yP2);yMax+=yP2;
+    var maxLen=0;portfolios.forEach(function(p){if(p.pfCurve.length>maxLen)maxLen=p.pfCurve.length;});
+    var xPos=function(i,len){return pad.l+(i/(len-1))*cw;};
+    var yPos=function(v){return pad.t+ch-(v-yMin)/(yMax-yMin)*ch;};
+
+    ctx.clearRect(0,0,w,h);
+    // Grid
+    ctx.strokeStyle='#1a1a2e';ctx.lineWidth=1;ctx.fillStyle='#686880';ctx.font='9px JetBrains Mono,monospace';ctx.textAlign='right';
+    var yStep=Math.pow(10,Math.floor(Math.log10((yMax-yMin)/4)));
+    if((yMax-yMin)/yStep>8)yStep*=2;
+    for(var yt=Math.ceil(yMin/yStep)*yStep;yt<=yMax;yt+=yStep){
+      var yy=yPos(yt);ctx.beginPath();ctx.moveTo(pad.l,yy);ctx.lineTo(w-pad.r,yy);ctx.stroke();
+      ctx.fillText(fmt(yt),pad.l-6,yy+3);
+    }
+    // X labels - use dates from longest portfolio
+    var longest=portfolios[0];portfolios.forEach(function(p){if(p.pfDates.length>longest.pfDates.length)longest=p;});
+    ctx.textAlign='center';
+    var step=Math.max(1,Math.floor(longest.pfCurve.length/300));
+    var lStep2=Math.max(1,Math.floor(longest.pfDates.length/7));
+    for(var i=0;i<longest.pfDates.length;i+=lStep2){
+      var d=longest.pfDates[i];
+      if(d)ctx.fillText(d.slice(0,4)+'.'+d.slice(5,7),xPos(i,longest.pfDates.length),h-8);
+    }
+    // Draw each portfolio
+    portfolios.forEach(function(p){
+      var pts=p.pfCurve;var s2=Math.max(1,Math.floor(pts.length/300));
+      // Area
+      ctx.beginPath();ctx.moveTo(xPos(0,pts.length),h-pad.b);
+      for(var i=0;i<pts.length;i+=s2){ctx.lineTo(xPos(i,pts.length),yPos(pts[i]));}
+      ctx.lineTo(xPos(pts.length-1,pts.length),yPos(pts[pts.length-1]));
+      ctx.lineTo(xPos(pts.length-1,pts.length),h-pad.b);ctx.closePath();
+      var grad=ctx.createLinearGradient(0,0,0,h);
+      grad.addColorStop(0,p.pfColor+'18');grad.addColorStop(1,p.pfColor+'03');
+      ctx.fillStyle=grad;ctx.fill();
+      // Line
+      ctx.beginPath();ctx.strokeStyle=p.pfColor;ctx.lineWidth=2.5;ctx.lineJoin='round';ctx.lineCap='round';
+      var started=false;
+      for(var i=0;i<pts.length;i+=s2){
+        var xx=xPos(i,pts.length),yy2=yPos(pts[i]);
+        if(!started){ctx.moveTo(xx,yy2);started=true;}else ctx.lineTo(xx,yy2);
+      }
+      // Make sure last point is included
+      ctx.lineTo(xPos(pts.length-1,pts.length),yPos(pts[pts.length-1]));
+      ctx.stroke();
+    });
+    c._meta={pad:pad,cw:cw,portfolios:portfolios};
+  },[portfolios,height]);
+
+  var handleMouse=function(e){
+    if(!canRef.current||!canRef.current._meta)return;
+    var rect=canRef.current.getBoundingClientRect();
+    var mx=e.clientX-rect.left;
+    var meta=canRef.current._meta;
+    var relX=mx-meta.pad.l;
+    if(relX<0||relX>meta.cw){setTip(null);return;}
+    var pct=relX/meta.cw;
+    var vals=meta.portfolios.map(function(p){
+      var idx=Math.round(pct*(p.pfCurve.length-1));
+      idx=Math.min(idx,p.pfCurve.length-1);
+      return{name:p.name.replace(/[^\w\sㄱ-힣]/g,'').trim(),value:p.pfCurve[idx],color:p.pfColor,date:p.pfDates[idx]};
+    });
+    setTip({x:e.clientX-rect.left,y:e.clientY-rect.top,vals:vals});
+  };
+
+  return React.createElement('div',{ref:wRef,style:{width:'100%',height:height,position:'relative'},onMouseMove:handleMouse,onMouseLeave:function(){setTip(null);}},
+    React.createElement('canvas',{ref:canRef,style:{display:'block'}}),
+    tip&&React.createElement('div',{style:{position:'absolute',left:Math.min(tip.x+12,(wRef.current?wRef.current.clientWidth:800)-200),top:Math.max(tip.y-80,8),background:'#0d0d16ee',border:'1px solid #282845',borderRadius:8,padding:'8px 10px',fontSize:10,pointerEvents:'none',zIndex:10,minWidth:160}},
+      tip.vals[0]&&tip.vals[0].date&&React.createElement('div',{style:{color:'#9090a8',marginBottom:4,fontFamily:'JetBrains Mono,monospace'}},tip.vals[0].date),
+      tip.vals.map(function(v,i){return React.createElement('div',{key:i,style:{display:'flex',justifyContent:'space-between',gap:16,marginBottom:2}},React.createElement('span',{style:{color:v.color,fontWeight:600}},v.name),React.createElement('span',{style:{fontFamily:'JetBrains Mono,monospace',color:'var(--g)'}},fmt(v.value)));})
+    )
+  );
+}
+
+function Sparkline(props){
+  var data=props.data,color=props.color||'#00ff88',h=props.height||100;
+  var canRef=useRef(null),wRef=useRef(null);
+  useEffect(function(){
+    if(!canRef.current||!wRef.current||!data||!data.length)return;
+    var c=canRef.current,w=wRef.current.clientWidth;
+    var dpr=window.devicePixelRatio||1;
+    c.width=w*dpr;c.height=h*dpr;c.style.width=w+'px';c.style.height=h+'px';
+    var ctx=c.getContext('2d');ctx.scale(dpr,dpr);
+    var pad=4,cw=w-pad*2,ch=h-pad*2;
+    var mn=Infinity,mx=-Infinity;
+    data.forEach(function(v){if(v<mn)mn=v;if(v>mx)mx=v;});
+    if(mn===mx){mn*=0.9;mx*=1.1;}
+    var step=Math.max(1,Math.floor(data.length/300));
+    var pts=[];for(var i=0;i<data.length;i+=step)pts.push(data[i]);if(pts[pts.length-1]!==data[data.length-1])pts.push(data[data.length-1]);
+    // Area fill
+    ctx.beginPath();
+    ctx.moveTo(pad,h-pad);
+    pts.forEach(function(v,i){var x=pad+(i/(pts.length-1))*cw;var y=pad+ch-(v-mn)/(mx-mn)*ch;if(i===0)ctx.lineTo(x,y);else ctx.lineTo(x,y);});
+    ctx.lineTo(pad+cw,h-pad);ctx.closePath();
+    var grad=ctx.createLinearGradient(0,0,0,h);
+    grad.addColorStop(0,color+'40');grad.addColorStop(1,color+'05');
+    ctx.fillStyle=grad;ctx.fill();
+    // Line
+    ctx.beginPath();ctx.strokeStyle=color;ctx.lineWidth=2;ctx.lineJoin='round';
+    pts.forEach(function(v,i){var x=pad+(i/(pts.length-1))*cw;var y=pad+ch-(v-mn)/(mx-mn)*ch;if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);});
+    ctx.stroke();
+  },[data,color,h]);
+  if(!data||!data.length)return null;
+  return React.createElement('div',{ref:wRef,style:{width:'100%',height:h,marginBottom:8}},React.createElement('canvas',{ref:canRef,style:{display:'block'}}));
+}
+
 function BestPortfolios(){
   var s1=useState(10),period=s1[0],setP=s1[1];
   var s2=useState(null),res=s2[0],setR=s2[1];
   var s3=useState(false),busy=s3[0],setBusy=s3[1];
   var PC=['#00ff88','#4488ff','#ffcc00','#ff8844','#f7931a','#627eea','#ffd700','#00ccee','#aa66ff','#ff4466','#44cc44','#ff66aa','#cc44ff','#c0c0c0','#8b6914'];
+  var PF_COLORS=['#00ff88','#4488ff','#ffcc00'];
 
   var run=function(){setBusy(true);setTimeout(function(){
     var sd=getStart(period);
@@ -650,17 +774,31 @@ function BestPortfolios(){
     var byR=av.slice().sort(function(a,b){return ar[b].totalReturn-ar[a].totalReturn;});
     var byDD=av.slice().sort(function(a,b){return ar[b].maxDD-ar[a].maxDD;});
     var byS=av.slice().sort(function(a,b){var sa=ar[a].maxDD!==0?ar[a].cagr/Math.abs(ar[a].maxDD):0;var sb=ar[b].maxDD!==0?ar[b].cagr/Math.abs(ar[b].maxDD):0;return sb-sa;});
-    var build=function(ranked,name,desc){
+
+    var build=function(ranked,name,desc,pfColor){
       var top=ranked.slice(0,5),ws=[35,25,20,12,8];
       var allocs=top.map(function(t,i){var o=Object.assign({},ar[t]);o.w=ws[i];o.color=PC[ASSETS.indexOf(t)];return o;});
       var wr=allocs.reduce(function(s,a){return s+a.totalReturn*a.w/100;},0);
       var wc=allocs.reduce(function(s,a){return s+a.cagr*a.w/100;},0);
-      return{name:name,desc:desc,allocs:allocs,wr:wr,wc:wc};
+      // Build weighted portfolio curve
+      var minLen=Infinity;
+      allocs.forEach(function(a){if(a.curve&&a.curve.length<minLen)minLen=a.curve.length;});
+      var pfCurve=[],pfDates=[];
+      if(minLen>0&&minLen<Infinity){
+        for(var i=0;i<minLen;i++){
+          var wVal=0;
+          allocs.forEach(function(a){if(a.curve&&a.curve[i])wVal+=a.curve[i].value*(a.w/100);});
+          pfCurve.push(Math.round(wVal*100)/100);
+          if(allocs[0].curve[i])pfDates.push(allocs[0].curve[i].date);
+        }
+      }
+      return{name:name,desc:desc,allocs:allocs,wr:wr,wc:wc,pfCurve:pfCurve,pfDates:pfDates,pfColor:pfColor};
     };
+
     setR({
-      maxR:build(byR,'🚀 최대 수익','총 수익률 최대화 기준'),
-      bestS:build(byS,'⚖️ 최고 위험 대비 수익','낙폭 대비 수익률 최적화'),
-      lowDD:build(byDD,'🛡️ 최소 낙폭','포트폴리오 하락 최소화'),
+      maxR:build(byR,'🚀 최대 수익','총 수익률 최대화 기준',PF_COLORS[0]),
+      bestS:build(byS,'⚖️ 최고 위험 대비 수익','낙폭 대비 수익률 최적화',PF_COLORS[1]),
+      lowDD:build(byDD,'🛡️ 최소 낙폭','포트폴리오 하락 최소화',PF_COLORS[2]),
       ind:av.map(function(t){return ar[t];}).sort(function(a,b){return b.totalReturn-a.totalReturn;})
     });
     setBusy(false);
@@ -690,7 +828,8 @@ function BestPortfolios(){
             React.createElement('h3',null,p.name),
             React.createElement('div',{className:'dd'},p.desc),
             React.createElement('div',{style:{fontFamily:'JetBrains Mono',fontSize:18,fontWeight:700,color:'var(--g)',marginBottom:3}},fPct(p.wr)+' 수익'),
-            React.createElement('div',{style:{fontFamily:'JetBrains Mono',fontSize:11,color:'var(--t2)',marginBottom:14}},'CAGR: '+fPct(p.wc)),
+            React.createElement('div',{style:{fontFamily:'JetBrains Mono',fontSize:11,color:'var(--t2)',marginBottom:10}},'CAGR: '+fPct(p.wc)),
+            React.createElement(Sparkline,{data:p.pfCurve,color:p.pfColor,height:100}),
             React.createElement('div',{className:'abar'},p.allocs.map(function(a,i){return React.createElement('div',{key:i,style:{width:a.w+'%',background:a.color},title:a.label+': '+a.w+'%'});})),
             React.createElement('div',{className:'alist'},p.allocs.map(function(a,i){
               return React.createElement('div',{key:i,className:'aitm'},
@@ -701,6 +840,21 @@ function BestPortfolios(){
           );
         })
       ),
+      // Big comparison chart
+      React.createElement('div',{style:{marginTop:20,background:'var(--bg2)',border:'1px solid var(--bdr)',borderRadius:11,padding:20}},
+        React.createElement('div',{style:{fontSize:14,fontWeight:700,marginBottom:4}},'포트폴리오 성과 비교'),
+        React.createElement('div',{style:{fontSize:11,color:'var(--t2)',marginBottom:14}},period+'년간 $500/월 적립 시 포트폴리오 자산 변화'),
+        React.createElement('div',{style:{display:'flex',gap:16,marginBottom:10,flexWrap:'wrap'}},
+          [res.maxR,res.bestS,res.lowDD].map(function(p,i){
+            return React.createElement('div',{key:i,style:{display:'flex',alignItems:'center',gap:5,fontSize:11}},
+              React.createElement('div',{style:{width:12,height:3,borderRadius:2,background:p.pfColor}}),
+              React.createElement('span',{style:{color:p.pfColor,fontWeight:600}},p.name.replace(/[^\w\sㄱ-힣]/g,'').trim())
+            );
+          })
+        ),
+        React.createElement(ComparisonChart,{portfolios:[res.maxR,res.bestS,res.lowDD],height:340})
+      ),
+      // Individual rankings table
       React.createElement('div',{style:{marginTop:20,background:'var(--bg2)',border:'1px solid var(--bdr)',borderRadius:11,padding:16}},
         React.createElement('div',{style:{fontSize:13,fontWeight:600,marginBottom:10}},'개별 자산 순위 ('+period+'년 적립식)'),
         React.createElement('table',{className:'ct'},
