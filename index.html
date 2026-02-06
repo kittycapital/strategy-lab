@@ -878,7 +878,6 @@ function BestPortfolios(){
   );
 }
 
-
 /* ===== 탭: AI 시뮬레이터 ===== */
 function AISimulator(){
   var s1=useState([]),assets=s1[0],setA=s1[1];
@@ -889,246 +888,184 @@ function AISimulator(){
   var s6=useState(0),progress=s6[0],setProg=s6[1];
   var s7=useState(''),progMsg=s7[0],setMsg=s7[1];
 
-  var goalLabels={beat:'🏆 거치식 이기기',maxret:'💰 최대 수익',minrisk:'🛡️ 최소 리스크',efficiency:'⚖️ 최적 효율'};
-
-  function combinePortfolio(combo,weight){
-    var minLen=Infinity;
-    combo.forEach(function(s){if(s.curve&&s.curve.length<minLen)minLen=s.curve.length;});
-    if(minLen<2||minLen===Infinity)return null;
-    var combinedCurve=[];
-    for(var i=0;i<minLen;i++){
-      var wVal=0,wBH=0,wInv=0;
-      combo.forEach(function(s){
-        wVal+=s.curve[i].value*weight;
-        wBH+=s.curve[i].buyHold*weight;
-        wInv+=s.curve[i].invested*weight;
-      });
-      combinedCurve.push({value:wVal,buyHold:wBH,invested:wInv});
-    }
-    var last=combinedCurve[combinedCurve.length-1];
-    var totalFinal=last.value,totalInvested=last.invested,totalBH=last.buyHold;
-    var tr=totalInvested>0?((totalFinal-totalInvested)/totalInvested)*100:0;
-    var bhR=totalInvested>0?((totalBH-totalInvested)/totalInvested)*100:0;
-    var yrs=combo[0].period;
-    var cagr=yrs>0?(Math.pow(Math.max(totalFinal/totalInvested,0.001),1/yrs)-1)*100:0;
-    var pk=0,mdd=0;
-    combinedCurve.forEach(function(pt){if(pt.value>pk)pk=pt.value;var d=pk>0?(pt.value-pk)/pk:0;if(d<mdd)mdd=d;});
-    var margin=tr-bhR;
-    var sharpe=mdd!==0?cagr/Math.abs(mdd):0;
-    var assetInfo=combo.map(function(s){return{ticker:s.ticker,label:s.label,stratLabel:s.stratLabel};});
-    return{assets:assetInfo,period:combo[0].period,totalReturn:tr,bhReturn:bhR,margin:margin,cagr:cagr,maxDD:mdd*100,sharpe:sharpe,finalValue:totalFinal,invested:totalInvested};
-  }
+  var goals={
+    beat:{l:'🏆 거치식 이기기',d:'적립식/전략이 거치식보다 높은 수익을 낸 조합'},
+    maxret:{l:'💰 최대 수익',d:'절대 수익률이 가장 높은 전략 조합'},
+    minrisk:{l:'🛡️ 최소 리스크',d:'최대 낙폭(MDD)이 가장 작은 전략 조합'},
+    efficiency:{l:'⚖️ 최적 효율',d:'위험 대비 수익률이 가장 좋은 전략 조합'}
+  };
 
   var run=function(){
     if(!assets.length)return;
     setBusy(true);setProg(0);setR(null);
-    var numAssets=assets.length;
-    var weight=1/numAssets;
+    var allResults=[];
+    var totalCombos=0;
+    var tested=0;
+
+    // Define parameter grid
     var paramSets=[];
     var periods=[3,5,10,15,20,25];
+    // DCA
     ['daily','weekly','monthly'].forEach(function(f){
-      periods.forEach(function(p){paramSets.push({sType:'dca',label:'적립식('+({daily:'매일',weekly:'매주',monthly:'매월'}[f])+')',period:p,params:{budget:budget,frequency:f}});});
+      periods.forEach(function(p){
+        paramSets.push({sType:'dca',label:'적립식 ('+({daily:'매일',weekly:'매주',monthly:'매월'}[f])+')',period:p,params:{budget:budget,frequency:f}});
+      });
     });
+    // MA
     [50,100,150,200,250].forEach(function(ma){
       [-15,-10,-5,0,3].forEach(function(th){
-        periods.forEach(function(p){paramSets.push({sType:'ma',label:'이평선'+ma+'일/'+th+'%',period:p,params:{budget:budget,maPeriod:ma,maThreshold:th}});});
+        periods.forEach(function(p){
+          paramSets.push({sType:'ma',label:'이평선 '+ma+'일 / '+th+'%',period:p,params:{budget:budget,maPeriod:ma,maThreshold:th}});
+        });
       });
     });
+    // Dip
     [-5,-10,-15,-20,-25,-30].forEach(function(dip){
       [25,30,35,40].forEach(function(rsi){
-        periods.forEach(function(p){paramSets.push({sType:'dip',label:'급락'+dip+'%/RSI'+rsi,period:p,params:{budget:budget,dipThreshold:dip,rsiThreshold:rsi}});});
+        periods.forEach(function(p){
+          paramSets.push({sType:'dip',label:'급락 '+dip+'% / RSI '+rsi,period:p,params:{budget:budget,dipThreshold:dip,rsiThreshold:rsi}});
+        });
       });
     });
+    // Hybrid
     [100,200].forEach(function(ma){
       [-10,-15,-20].forEach(function(dip){
         [25,30].forEach(function(rsi){
-          periods.forEach(function(p){paramSets.push({sType:'hybrid',label:'하이브리드MA'+ma+'/'+dip+'%',period:p,params:{budget:budget,maPeriod:ma,dipThreshold:dip,rsiThreshold:rsi}});});
+          periods.forEach(function(p){
+            paramSets.push({sType:'hybrid',label:'하이브리드 MA'+ma+' / '+dip+'%',period:p,params:{budget:budget,maPeriod:ma,dipThreshold:dip,rsiThreshold:rsi}});
+          });
         });
       });
     });
 
-    setTimeout(function(){
-      setMsg('Phase 1: 자산별 전략 분석 중...');
-      var perAssetByPeriod={};
-      assets.forEach(function(tk){
-        perAssetByPeriod[tk]={};
-        paramSets.forEach(function(ps){
+    totalCombos=assets.length*paramSets.length;
+
+    // Process in batches using setTimeout for UI updates
+    var batchSize=50;
+    var idx=0;
+
+    function processBatch(){
+      var batchEnd=Math.min(idx+batchSize,paramSets.length);
+      for(var i=idx;i<batchEnd;i++){
+        var ps=paramSets[i];
+        assets.forEach(function(tk){
+          tested++;
           var sd=getStart(ps.period);
           var r=runStrategy(tk,ps.sType,ps.params,sd,null);
-          if(!r)return;
-          if(!perAssetByPeriod[tk][ps.period])perAssetByPeriod[tk][ps.period]=[];
-          perAssetByPeriod[tk][ps.period].push({
-            ticker:tk,label:r.label,sType:ps.sType,stratLabel:ps.label,
-            period:ps.period,curve:r.curve,finalValue:r.finalValue,
-            invested:r.invested,totalReturn:r.totalReturn,bhReturn:r.bhReturn,
-            cagr:r.cagr,maxDD:r.maxDD,params:ps.params
-          });
-        });
-      });
-      setProg(30);
-
-      setMsg('Phase 2: 포트폴리오 조합 분석 중...');
-      var allResults=[];
-
-      if(numAssets===1){
-        var tk=assets[0];
-        Object.keys(perAssetByPeriod[tk]).forEach(function(p){
-          (perAssetByPeriod[tk][p]||[]).forEach(function(r){
+          if(r){
             var margin=r.totalReturn-r.bhReturn;
             var sharpe=r.maxDD!==0?r.cagr/Math.abs(r.maxDD):0;
             allResults.push({
-              assets:[{ticker:r.ticker,label:r.label,stratLabel:r.stratLabel}],
-              period:parseInt(p),totalReturn:r.totalReturn,bhReturn:r.bhReturn,
-              margin:margin,cagr:r.cagr,maxDD:r.maxDD,sharpe:sharpe,
-              finalValue:r.finalValue,invested:r.invested
+              ticker:r.ticker,label:r.label,stratType:ps.sType,stratLabel:ps.label,
+              period:ps.period,finalValue:r.finalValue,invested:r.invested,
+              totalReturn:r.totalReturn,bhReturn:r.bhReturn,margin:margin,
+              cagr:r.cagr,maxDD:r.maxDD,sharpe:sharpe,
+              params:ps.params,curve:r.curve
             });
-          });
-        });
-      }else{
-        var TOP_N=numAssets<=3?15:8;
-        periods.forEach(function(period){
-          var topPerAsset=[];
-          var allHaveData=true;
-          assets.forEach(function(tk){
-            var arr=perAssetByPeriod[tk][period];
-            if(!arr||!arr.length){allHaveData=false;return;}
-            arr.sort(function(a,b){return b.totalReturn-a.totalReturn;});
-            topPerAsset.push(arr.slice(0,TOP_N));
-          });
-          if(!allHaveData||topPerAsset.length!==numAssets)return;
-
-          if(numAssets===2){
-            for(var i=0;i<topPerAsset[0].length;i++){
-              for(var j=0;j<topPerAsset[1].length;j++){
-                var cr=combinePortfolio([topPerAsset[0][i],topPerAsset[1][j]],weight);
-                if(cr)allResults.push(cr);
-              }
-            }
-          }else if(numAssets===3){
-            for(var i=0;i<topPerAsset[0].length;i++){
-              for(var j=0;j<topPerAsset[1].length;j++){
-                for(var k=0;k<topPerAsset[2].length;k++){
-                  var cr=combinePortfolio([topPerAsset[0][i],topPerAsset[1][j],topPerAsset[2][k]],weight);
-                  if(cr)allResults.push(cr);
-                }
-              }
-            }
-          }else{
-            var maxPer=5;
-            var indices=assets.map(function(){return 0;});
-            var maxIter=Math.pow(maxPer,numAssets);
-            for(var iter=0;iter<maxIter;iter++){
-              var combo=[];var valid=true;
-              for(var a=0;a<numAssets;a++){
-                if(indices[a]>=topPerAsset[a].length){valid=false;break;}
-                combo.push(topPerAsset[a][indices[a]]);
-              }
-              if(valid){var cr=combinePortfolio(combo,weight);if(cr)allResults.push(cr);}
-              var carry=true;
-              for(var a=numAssets-1;a>=0&&carry;a--){
-                indices[a]++;
-                if(indices[a]>=maxPer){indices[a]=0;}else{carry=false;}
-              }
-              if(carry)break;
-            }
           }
         });
       }
-      setProg(80);setMsg('결과 정렬 중...');
+      idx=batchEnd;
+      var pct=Math.round((idx/paramSets.length)*100);
+      setProg(pct);
+      setMsg(tested+'/'+totalCombos+' 조합 분석 중...');
 
-      if(goal==='beat'){
-        allResults=allResults.filter(function(r){return r.margin>0;});
-        allResults.sort(function(a,b){return b.margin-a.margin;});
-      }else if(goal==='maxret'){
-        allResults.sort(function(a,b){return b.totalReturn-a.totalReturn;});
-      }else if(goal==='minrisk'){
-        allResults.sort(function(a,b){return b.maxDD-a.maxDD;});
+      if(idx<paramSets.length){
+        setTimeout(processBatch,0);
       }else{
-        allResults.sort(function(a,b){return b.sharpe-a.sharpe;});
-      }
+        // Done — filter & sort based on goal
+        var filtered;
+        if(goal==='beat'){
+          filtered=allResults.filter(function(r){return r.margin>0;});
+          filtered.sort(function(a,b){return b.margin-a.margin;});
+        }else if(goal==='maxret'){
+          filtered=allResults.slice();
+          filtered.sort(function(a,b){return b.totalReturn-a.totalReturn;});
+        }else if(goal==='minrisk'){
+          filtered=allResults.slice();
+          filtered.sort(function(a,b){return b.maxDD-a.maxDD;});
+        }else{
+          filtered=allResults.slice();
+          filtered.sort(function(a,b){return b.sharpe-a.sharpe;});
+        }
 
-      setProg(100);
-      setR({top:allResults.slice(0,30),totalTested:allResults.length,totalFound:allResults.length,goal:goal,numAssets:numAssets});
-      setBusy(false);
-    },20);
+        // Group best per asset
+        var bestPerAsset={};
+        filtered.forEach(function(r){
+          if(!bestPerAsset[r.ticker])bestPerAsset[r.ticker]=r;
+        });
+
+        setR({
+          all:filtered,
+          top:filtered.slice(0,30),
+          bestPerAsset:bestPerAsset,
+          totalTested:totalCombos,
+          totalFound:goal==='beat'?filtered.length:filtered.length,
+          goal:goal
+        });
+        setBusy(false);
+      }
+    }
+    setTimeout(processBatch,10);
   };
 
   var goalDefs=[
-    {id:'beat',l:'🏆 거치식 이기기',d:'포트폴리오가 거치식보다 높은 수익'},
+    {id:'beat',l:'🏆 거치식 이기기',d:'적립식이 거치식보다 높은 수익'},
     {id:'maxret',l:'💰 최대 수익',d:'절대 수익률 최대화'},
     {id:'minrisk',l:'🛡️ 최소 리스크',d:'최대 낙폭 최소화'},
     {id:'efficiency',l:'⚖️ 최적 효율',d:'위험 대비 수익 최적화'}
   ];
 
-  var weightPct=assets.length>0?Math.round(100/assets.length):0;
-  var btnText=busy?'분석 중...':'🤖 AI 분석 시작';
-  if(!busy&&assets.length){
-    btnText='🤖 AI 분석 시작 ('+assets.length+'개 자산';
-    if(assets.length>1)btnText+=' · 균등 '+weightPct+'%';
-    btnText+=')';
-  }
-
-  // Build elements array for return
-  var els=[];
-
-  // Help box
-  els.push(React.createElement(HelpBox,{key:'help'},
-    React.createElement('div',{className:'hitem'},React.createElement('b',null,'사용법: '),'자산을 선택하고 목표를 설정한 뒤 ',React.createElement('span',{style:{color:'var(--g)',fontWeight:600}},'AI 분석 시작'),' 버튼을 누르세요.'),
-    React.createElement('div',{style:{marginTop:10,marginBottom:4,fontWeight:600,color:'var(--t1)',fontSize:11}},'작동 방식'),
-    React.createElement('div',{className:'hitem'},React.createElement('span',{className:'tag'},'1개'),' 해당 자산에 100% 투자, 모든 전략·매개변수·기간 조합 테스트'),
-    React.createElement('div',{className:'hitem'},React.createElement('span',{className:'tag'},'2개'),' 50:50 균등 배분, 각 자산별 최적 전략을 독립적으로 탐색'),
-    React.createElement('div',{className:'hitem'},React.createElement('span',{className:'tag'},'3개'),' 33:33:33 균등 배분'),
-    React.createElement('div',{className:'hitem'},React.createElement('span',{className:'tag'},'4~5개'),' 균등 배분 (20~25%), 각 자산에 서로 다른 전략 적용 가능'),
-    React.createElement('div',{className:'hitem',style:{marginTop:6}},'⚡ AI가 자산별 수백 개 전략을 테스트한 후, 상위 전략을 조합하여 최적의 포트폴리오를 찾습니다.'),
-    React.createElement('div',{className:'hitem'},'예시: 비트코인 + 금 + SPY → 비트코인은 급락 매수, 금은 월 적립식, SPY는 하이브리드처럼 각 자산에 서로 다른 전략이 적용됩니다.'),
-    React.createElement('div',{className:'hitem',style:{color:'var(--t3)',fontSize:10}},'⚡ 최대 5개 자산까지 선택 가능합니다')
-  ));
-
-  // Hero
-  els.push(React.createElement('div',{key:'hero',style:{textAlign:'center',padding:'28px 0 20px'}},
-    React.createElement('h2',{style:{fontSize:28,fontWeight:800,background:'linear-gradient(135deg,#00ff88,#4488ff,#aa66ff)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',marginBottom:6}},'🤖 AI 시뮬레이터'),
-    React.createElement('p',{style:{color:'var(--t2)',fontSize:13,maxWidth:500,margin:'0 auto'}},'수백 개의 전략 조합을 자동으로 분석하여 최적의 투자 전략을 찾아드립니다')
-  ));
-
-  // Controls
-  var assetBox=React.createElement('div',{style:{background:'var(--bg2)',border:'1px solid var(--bdr)',borderRadius:11,padding:16}},
-    React.createElement('div',{className:'stitle',style:{marginTop:0}},'자산 선택 (최대 5개)'),
-    assets.length>1?React.createElement('div',{style:{fontSize:10,color:'var(--g)',marginBottom:8,fontFamily:'JetBrains Mono'}},'균등 배분: 자산당 '+weightPct+'%'):null,
-    React.createElement(AssetSel,{sel:assets,onChange:setA,max:5})
-  );
-
-  var goalBox=React.createElement('div',{style:{background:'var(--bg2)',border:'1px solid var(--bdr)',borderRadius:11,padding:16,marginBottom:12}},
-    React.createElement('div',{className:'stitle',style:{marginTop:0}},'분석 목표'),
-    goalDefs.map(function(g){
-      return React.createElement('div',{key:g.id,className:'sbtn'+(goal===g.id?' on':''),onClick:function(){setGoal(g.id);}},
-        React.createElement('span',{className:'lb'},g.l),
-        React.createElement('span',{className:'ds'},g.d)
-      );
-    })
-  );
-
-  var budgetLabel='$'+budget;
-  if(assets.length>1)budgetLabel+=' (자산당 $'+Math.round(budget/assets.length)+')';
-  var budgetBox=React.createElement('div',{style:{background:'var(--bg2)',border:'1px solid var(--bdr)',borderRadius:11,padding:16}},
-    React.createElement('div',{className:'stitle',style:{marginTop:0}},'월 투자금'),
-    React.createElement('div',{className:'sgrp',style:{marginBottom:0}},
-      React.createElement('div',{className:'shdr'},React.createElement('span',{className:'slbl'},''),React.createElement('span',{className:'sval'},budgetLabel)),
-      React.createElement('input',{type:'range',min:100,max:5000,step:100,value:budget,onChange:function(e){setB(+e.target.value);}})
-    )
-  );
-
-  var rightCol=React.createElement('div',null,goalBox,budgetBox);
-  var grid=React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:20,marginBottom:20}},assetBox,rightCol);
-  var runBtn=React.createElement('button',{
-    style:{width:'100%',padding:14,background:assets.length?'linear-gradient(135deg,#00ff88,#4488ff)':'#333',border:'none',borderRadius:9,fontSize:15,fontWeight:700,color:assets.length?'#000':'#666',cursor:assets.length?'pointer':'not-allowed',fontFamily:'inherit',transition:'.3s',marginBottom:20},
-    onClick:run,disabled:!assets.length||busy
-  },btnText);
-
-  els.push(React.createElement('div',{key:'ctrl',style:{maxWidth:900,margin:'0 auto'}},grid,runBtn));
-
-  // Progress bar
-  if(busy){
-    els.push(React.createElement('div',{key:'prog',style:{maxWidth:900,margin:'0 auto 20px'}},
+  return React.createElement('div',null,
+    React.createElement(HelpBox,null,
+      React.createElement('div',{className:'hitem'},React.createElement('b',null,'사용법: '),'자산을 선택하고 목표를 설정한 뒤 ',React.createElement('span',{style:{color:'var(--g)',fontWeight:600}},'AI 분석 시작'),' 버튼을 누르세요.'),
+      React.createElement('div',{className:'hitem'},'AI가 자산당 수백 개의 전략·매개변수·기간 조합을 자동으로 테스트합니다.'),
+      React.createElement('div',{className:'hitem'},React.createElement('span',{className:'tag'},'거치식 이기기'),' 적립식/전략 매수가 일시불 투자보다 높은 수익을 내는 조합만 필터링'),
+      React.createElement('div',{className:'hitem'},React.createElement('span',{className:'tag'},'최대 수익'),' 어떤 전략이든 절대 수익이 가장 높은 조합 순으로 정렬'),
+      React.createElement('div',{className:'hitem'},React.createElement('span',{className:'tag'},'최소 리스크'),' 하락장에서 덜 떨어지는 안정적인 전략 조합'),
+      React.createElement('div',{className:'hitem'},React.createElement('span',{className:'tag'},'최적 효율'),' CAGR ÷ MDD 비율이 가장 좋은 전략 조합')
+    ),
+    // Hero
+    React.createElement('div',{style:{textAlign:'center',padding:'28px 0 20px'}},
+      React.createElement('h2',{style:{fontSize:28,fontWeight:800,background:'linear-gradient(135deg,#00ff88,#4488ff,#aa66ff)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',marginBottom:6}},'🤖 AI 시뮬레이터'),
+      React.createElement('p',{style:{color:'var(--t2)',fontSize:13,maxWidth:500,margin:'0 auto'}},'수백 개의 전략 조합을 자동으로 분석하여 최적의 투자 전략을 찾아드립니다')
+    ),
+    // Controls
+    React.createElement('div',{style:{maxWidth:900,margin:'0 auto'}},
+      React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:20,marginBottom:20}},
+        // Left: Asset selection
+        React.createElement('div',{style:{background:'var(--bg2)',border:'1px solid var(--bdr)',borderRadius:11,padding:16}},
+          React.createElement('div',{className:'stitle',style:{marginTop:0}},'자산 선택 (1개 이상)'),
+          React.createElement(AssetSel,{sel:assets,onChange:setA,max:15})
+        ),
+        // Right: Goal + Budget
+        React.createElement('div',null,
+          React.createElement('div',{style:{background:'var(--bg2)',border:'1px solid var(--bdr)',borderRadius:11,padding:16,marginBottom:12}},
+            React.createElement('div',{className:'stitle',style:{marginTop:0}},'분석 목표'),
+            goalDefs.map(function(g){
+              return React.createElement('div',{key:g.id,className:'sbtn'+(goal===g.id?' on':''),onClick:function(){setGoal(g.id);}},
+                React.createElement('span',{className:'lb'},g.l),
+                React.createElement('span',{className:'ds'},g.d)
+              );
+            })
+          ),
+          React.createElement('div',{style:{background:'var(--bg2)',border:'1px solid var(--bdr)',borderRadius:11,padding:16}},
+            React.createElement('div',{className:'stitle',style:{marginTop:0}},'월 투자금'),
+            React.createElement('div',{className:'sgrp',style:{marginBottom:0}},
+              React.createElement('div',{className:'shdr'},React.createElement('span',{className:'slbl'},''),React.createElement('span',{className:'sval'},'$'+budget)),
+              React.createElement('input',{type:'range',min:100,max:5000,step:100,value:budget,onChange:function(e){setB(+e.target.value);}})
+            )
+          )
+        )
+      ),
+      // Run button
+      React.createElement('button',{
+        style:{width:'100%',padding:14,background:assets.length?'linear-gradient(135deg,#00ff88,#4488ff)':'#333',border:'none',borderRadius:9,fontSize:15,fontWeight:700,color:assets.length?'#000':'#666',cursor:assets.length?'pointer':'not-allowed',fontFamily:'inherit',transition:'.3s',marginBottom:20},
+        onClick:run,disabled:!assets.length||busy
+      },busy?'분석 중...':'🤖 AI 분석 시작'+(assets.length?' ('+assets.length+'개 자산)':''))
+    ),
+    // Progress
+    busy&&React.createElement('div',{style:{maxWidth:900,margin:'0 auto 20px'}},
       React.createElement('div',{style:{background:'var(--bg2)',border:'1px solid var(--bdr)',borderRadius:9,padding:16}},
         React.createElement('div',{style:{display:'flex',justifyContent:'space-between',marginBottom:8}},
           React.createElement('span',{style:{fontSize:12,color:'var(--t2)'}},progMsg),
@@ -1138,133 +1075,94 @@ function AISimulator(){
           React.createElement('div',{style:{height:'100%',width:progress+'%',background:'linear-gradient(90deg,#00ff88,#4488ff)',borderRadius:3,transition:'width .2s'}})
         )
       )
-    ));
-  }
-
-  // Results
-  if(res&&!busy){
-    var resEls=[];
-
-    // Summary banner
-    var bannerBg=res.goal==='beat'&&res.totalFound>0?'linear-gradient(135deg,rgba(0,255,136,.08),rgba(68,136,255,.08))':'var(--bg2)';
-    var bannerBorder=res.goal==='beat'&&res.totalFound>0?'#00ff8840':'var(--bdr)';
-    var bannerChildren=[];
-    if(res.goal==='beat'){
-      if(res.totalFound>0){
-        bannerChildren.push(React.createElement('div',{key:'t',style:{fontSize:20,fontWeight:800,color:'var(--g)',marginBottom:4}},'✅ 거치식을 이긴 전략 '+res.totalFound.toLocaleString()+'개 발견!'));
-      }else{
-        bannerChildren.push(React.createElement('div',{key:'t',style:{fontSize:20,fontWeight:800,color:'var(--r)',marginBottom:4}},'❌ 모든 조합에서 거치식이 우세합니다'));
-      }
-    }else{
-      bannerChildren.push(React.createElement('div',{key:'t',style:{fontSize:20,fontWeight:800,color:'var(--g)',marginBottom:4}},goalLabels[res.goal]+' — 분석 완료'));
-    }
-    var subText=(res.numAssets>1?res.numAssets+'개 자산 균등 배분 ('+weightPct+'%) · ':'')+res.totalTested.toLocaleString()+'개 조합 분석 완료';
-    bannerChildren.push(React.createElement('div',{key:'s',style:{fontSize:12,color:'var(--t2)'}},subText));
-    resEls.push(React.createElement('div',{key:'banner',style:{background:bannerBg,border:'1px solid '+bannerBorder,borderRadius:11,padding:20,textAlign:'center',marginBottom:20}},bannerChildren));
-
-    // Top 6 cards
-    if(res.top.length>0){
-      var medals=['🥇','🥈','🥉','4','5','6'];
-      var mColors=['var(--y)','#c0c0c0','#cc8844','var(--t3)','var(--t3)','var(--t3)'];
-      var cards=res.top.slice(0,6).map(function(r,idx){
-        var cardEls=[];
-        cardEls.push(React.createElement('div',{key:'hd',style:{display:'flex',alignItems:'center',gap:8,marginBottom:10}},
-          React.createElement('span',{style:{fontSize:idx<3?20:14,fontWeight:800,color:mColors[idx]}},medals[idx]),
-          React.createElement('span',{style:{fontSize:12,fontWeight:700,color:'var(--t1)'}},r.period+'년')
-        ));
-        r.assets.forEach(function(a,ai){
-          cardEls.push(React.createElement('div',{key:'a'+ai,style:{display:'flex',alignItems:'center',gap:6,marginBottom:4}},
-            React.createElement('div',{style:{width:6,height:6,borderRadius:2,background:COLORS[a.ticker]}}),
-            React.createElement('span',{style:{fontSize:11,color:COLORS[a.ticker],fontWeight:600}},a.label.split(' (')[0]),
-            React.createElement('span',{style:{fontSize:10,color:'var(--t3)',fontFamily:'JetBrains Mono'}},a.stratLabel)
-          ));
-        });
-        var statsEls=[];
-        statsEls.push(React.createElement('div',{key:'ret'},
-          React.createElement('div',{style:{fontSize:9,color:'var(--t4)'}},'수익률'),
-          React.createElement('div',{style:{fontFamily:'JetBrains Mono',fontSize:17,fontWeight:700,color:r.totalReturn>0?'var(--g)':'var(--r)'}},fPct(r.totalReturn))
-        ));
-        if(res.goal==='beat'){
-          statsEls.push(React.createElement('div',{key:'margin'},
-            React.createElement('div',{style:{fontSize:9,color:'var(--t4)'}},'거치식 대비'),
-            React.createElement('div',{style:{fontFamily:'JetBrains Mono',fontSize:17,fontWeight:700,color:r.margin>0?'var(--g)':'var(--r)'}},(r.margin>0?'▲':'▼')+Math.abs(r.margin).toFixed(1)+'%')
-          ));
-        }
-        statsEls.push(React.createElement('div',{key:'cagr'},
-          React.createElement('div',{style:{fontSize:9,color:'var(--t4)'}},'CAGR'),
-          React.createElement('div',{style:{fontFamily:'JetBrains Mono',fontSize:17,fontWeight:700,color:'var(--t1)'}},fPct(r.cagr))
-        ));
-        statsEls.push(React.createElement('div',{key:'mdd'},
-          React.createElement('div',{style:{fontSize:9,color:'var(--t4)'}},'MDD'),
-          React.createElement('div',{style:{fontFamily:'JetBrains Mono',fontSize:17,fontWeight:700,color:'var(--r)'}},fPct(r.maxDD))
-        ));
-        cardEls.push(React.createElement('div',{key:'stats',style:{display:'flex',gap:14,marginTop:10,paddingTop:10,borderTop:'1px solid var(--bdr)'}},statsEls));
-        return React.createElement('div',{key:idx,style:{background:'var(--bg2)',border:'1px solid '+(idx<3?mColors[idx]+'40':'var(--bdr)'),borderRadius:10,padding:16}},cardEls);
-      });
-      resEls.push(React.createElement('div',{key:'cards',style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(340px,1fr))',gap:12,marginBottom:20}},cards));
-    }
-
-    // Full table
-    if(res.top.length>0){
-      var ths=[React.createElement('th',{key:'r'},'순위'),React.createElement('th',{key:'s'},res.numAssets>1?'포트폴리오 전략':'전략'),React.createElement('th',{key:'p'},'기간'),React.createElement('th',{key:'v'},'최종 자산'),React.createElement('th',{key:'tr'},'수익률')];
-      if(res.goal==='beat'){ths.push(React.createElement('th',{key:'bh'},'거치식'));ths.push(React.createElement('th',{key:'m'},'차이'));}
-      ths.push(React.createElement('th',{key:'c'},'CAGR'));
-      ths.push(React.createElement('th',{key:'d'},'MDD'));
-
-      var rows=res.top.map(function(r,i){
-        var tds=[
-          React.createElement('td',{key:'r',style:{color:i<3?'var(--y)':'var(--t4)'}},i+1),
-          React.createElement('td',{key:'s',style:{fontSize:10,maxWidth:280}},
-            r.assets.map(function(a,ai){
-              return React.createElement('span',{key:ai},
-                React.createElement('span',{style:{color:COLORS[a.ticker],fontWeight:600}},a.label.split(' (')[0]),
-                React.createElement('span',{style:{color:'var(--t3)'}},':'+a.stratLabel),
-                ai<r.assets.length-1?' + ':''
+    ),
+    // Results
+    res&&!busy&&React.createElement('div',{style:{maxWidth:1200,margin:'0 auto'}},
+      // Summary banner
+      React.createElement('div',{style:{background:res.goal==='beat'&&res.totalFound>0?'linear-gradient(135deg,rgba(0,255,136,.08),rgba(68,136,255,.08))':'var(--bg2)',border:'1px solid '+(res.goal==='beat'&&res.totalFound>0?'#00ff8840':'var(--bdr)'),borderRadius:11,padding:20,textAlign:'center',marginBottom:20}},
+        res.goal==='beat'?
+          React.createElement(React.Fragment,null,
+            res.totalFound>0?
+              React.createElement('div',{style:{fontSize:20,fontWeight:800,color:'var(--g)',marginBottom:4}},'✅ 거치식을 이긴 전략 '+res.totalFound+'개 발견!'):
+              React.createElement('div',{style:{fontSize:20,fontWeight:800,color:'var(--r)',marginBottom:4}},'❌ 모든 조합에서 거치식이 우세합니다'),
+            React.createElement('div',{style:{fontSize:12,color:'var(--t2)'}},res.totalTested.toLocaleString()+'개 조합 테스트 완료')
+          ):
+          React.createElement(React.Fragment,null,
+            React.createElement('div',{style:{fontSize:20,fontWeight:800,color:'var(--g)',marginBottom:4}},goals[res.goal].l+' — 분석 완료'),
+            React.createElement('div',{style:{fontSize:12,color:'var(--t2)'}},res.totalTested.toLocaleString()+'개 조합 테스트 완료')
+          )
+      ),
+      // Best per asset summary
+      Object.keys(res.bestPerAsset).length>0&&React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(260px,1fr))',gap:12,marginBottom:20}},
+        Object.values(res.bestPerAsset).map(function(r){
+          return React.createElement('div',{key:r.ticker,style:{background:'var(--bg2)',border:'1px solid var(--bdr)',borderRadius:9,padding:16}},
+            React.createElement('div',{style:{display:'flex',alignItems:'center',gap:6,marginBottom:8}},
+              React.createElement('div',{style:{width:8,height:8,borderRadius:2,background:COLORS[r.ticker]}}),
+              React.createElement('span',{style:{fontWeight:700,fontSize:13,color:COLORS[r.ticker]}},r.label)
+            ),
+            React.createElement('div',{style:{fontSize:11,color:'var(--t2)',marginBottom:6}},r.stratLabel+' · '+r.period+'년'),
+            React.createElement('div',{style:{display:'flex',gap:16}},
+              React.createElement('div',null,
+                React.createElement('div',{style:{fontSize:9,color:'var(--t4)'}},'전략 수익률'),
+                React.createElement('div',{style:{fontFamily:'JetBrains Mono',fontSize:16,fontWeight:700,color:r.totalReturn>0?'var(--g)':'var(--r)'}},fPct(r.totalReturn))
+              ),
+              res.goal==='beat'&&React.createElement('div',null,
+                React.createElement('div',{style:{fontSize:9,color:'var(--t4)'}},'거치식 대비'),
+                React.createElement('div',{style:{fontFamily:'JetBrains Mono',fontSize:16,fontWeight:700,color:r.margin>0?'var(--g)':'var(--r)'}},(r.margin>0?'▲':'▼')+Math.abs(r.margin).toFixed(1)+'%')
+              ),
+              React.createElement('div',null,
+                React.createElement('div',{style:{fontSize:9,color:'var(--t4)'}},'MDD'),
+                React.createElement('div',{style:{fontFamily:'JetBrains Mono',fontSize:16,fontWeight:700,color:'var(--r)'}},fPct(r.maxDD))
+              )
+            )
+          );
+        })
+      ),
+      // Full table
+      React.createElement('div',{style:{background:'var(--bg2)',border:'1px solid var(--bdr)',borderRadius:11,padding:16,maxHeight:560,overflowY:'auto'}},
+        React.createElement('div',{style:{fontSize:13,fontWeight:600,marginBottom:10}},'상위 '+res.top.length+'개 전략 조합'),
+        React.createElement('table',{className:'ct'},
+          React.createElement('thead',null,React.createElement('tr',null,
+            React.createElement('th',null,'순위'),
+            React.createElement('th',null,'자산'),
+            React.createElement('th',null,'전략'),
+            React.createElement('th',null,'기간'),
+            React.createElement('th',null,'최종 자산'),
+            React.createElement('th',null,'수익률'),
+            res.goal==='beat'&&React.createElement('th',null,'거치식'),
+            res.goal==='beat'&&React.createElement('th',null,'차이'),
+            React.createElement('th',null,'CAGR'),
+            React.createElement('th',null,'MDD')
+          )),
+          React.createElement('tbody',null,
+            res.top.map(function(r,i){
+              return React.createElement('tr',{key:i},
+                React.createElement('td',{style:{color:i<3?'var(--y)':'var(--t4)'}},i+1),
+                React.createElement('td',{style:{color:COLORS[r.ticker],fontWeight:600}},r.label),
+                React.createElement('td',{style:{fontSize:10}},r.stratLabel),
+                React.createElement('td',null,r.period+'년'),
+                React.createElement('td',{style:{color:'var(--g)',fontWeight:600}},fmt(r.finalValue)),
+                React.createElement('td',{style:{color:r.totalReturn>0?'var(--g)':'var(--r)'}},fPct(r.totalReturn)),
+                res.goal==='beat'&&React.createElement('td',{style:{color:'var(--t2)'}},fPct(r.bhReturn)),
+                res.goal==='beat'&&React.createElement('td',{style:{color:r.margin>0?'var(--g)':'var(--r)',fontWeight:600}},(r.margin>0?'▲':'▼')+Math.abs(r.margin).toFixed(1)+'%'),
+                React.createElement('td',null,fPct(r.cagr)),
+                React.createElement('td',{style:{color:'var(--r)'}},fPct(r.maxDD))
               );
             })
-          ),
-          React.createElement('td',{key:'p'},r.period+'년'),
-          React.createElement('td',{key:'v',style:{color:'var(--g)',fontWeight:600}},fmt(r.finalValue)),
-          React.createElement('td',{key:'tr',style:{color:r.totalReturn>0?'var(--g)':'var(--r)'}},fPct(r.totalReturn))
-        ];
-        if(res.goal==='beat'){
-          tds.push(React.createElement('td',{key:'bh',style:{color:'var(--t2)'}},fPct(r.bhReturn)));
-          tds.push(React.createElement('td',{key:'m',style:{color:r.margin>0?'var(--g)':'var(--r)',fontWeight:600}},(r.margin>0?'▲':'▼')+Math.abs(r.margin).toFixed(1)+'%'));
-        }
-        tds.push(React.createElement('td',{key:'c'},fPct(r.cagr)));
-        tds.push(React.createElement('td',{key:'d',style:{color:'var(--r)'}},fPct(r.maxDD)));
-        return React.createElement('tr',{key:i},tds);
-      });
-
-      resEls.push(React.createElement('div',{key:'table',style:{background:'var(--bg2)',border:'1px solid var(--bdr)',borderRadius:11,padding:16,maxHeight:560,overflowY:'auto'}},
-        React.createElement('div',{style:{fontSize:13,fontWeight:600,marginBottom:10}},'전체 결과 (상위 '+Math.min(res.top.length,30)+'개)'),
-        React.createElement('table',{className:'ct'},
-          React.createElement('thead',null,React.createElement('tr',null,ths)),
-          React.createElement('tbody',null,rows)
+          )
         )
-      ));
-    }
-
-    // Insight box
-    if(res.goal==='beat'){
-      var insightText;
-      if(res.totalFound>0){
-        insightText=res.numAssets>1?
-          '여러 자산을 조합하면 개별 자산보다 거치식을 이길 확률이 높아집니다. 서로 다른 자산이 다른 시기에 하락하므로, 분산 투자 + 전략 매수의 시너지가 발생합니다. 특히 변동성이 큰 자산(비트코인, 신흥국)과 안정 자산(금, 미국채)을 함께 사용할 때 효과적입니다.':
-          '거치식을 이기는 핵심은 하락장에서 더 많이 매수하는 것입니다. 급락 매수와 하이브리드 전략이 가장 효과적이며, 특히 2008 금융위기나 코로나 폭락을 포함한 기간에서 적립식/전략 매수의 장점이 극대화됩니다.';
-      }else{
-        insightText='선택한 자산과 기간에서는 거치식이 모든 전략을 앞섰습니다. 이는 해당 기간이 강한 상승장이었기 때문입니다. 다른 기간이나 변동성이 큰 자산(예: 비트코인, 신흥국)을 추가해보세요. 분산 투자가 거치식을 이길 확률을 높여줍니다.';
-      }
-      resEls.push(React.createElement('div',{key:'insight',style:{background:'var(--bg2)',border:'1px solid var(--bdr)',borderRadius:11,padding:16,marginTop:16}},
+      ),
+      // Insight box at bottom
+      res.goal==='beat'&&React.createElement('div',{style:{background:'var(--bg2)',border:'1px solid var(--bdr)',borderRadius:11,padding:16,marginTop:16}},
         React.createElement('div',{style:{fontSize:13,fontWeight:700,marginBottom:8,color:'var(--t1)'}},'💡 분석 인사이트'),
-        React.createElement('div',{style:{fontSize:12,color:'var(--t2)',lineHeight:1.8}},insightText)
-      ));
-    }
-
-    els.push(React.createElement('div',{key:'results',style:{maxWidth:1200,margin:'0 auto'}},resEls));
-  }
-
-  return React.createElement('div',null,els);
+        React.createElement('div',{style:{fontSize:12,color:'var(--t2)',lineHeight:1.8}},
+          res.totalFound>0?
+            '거치식을 이기는 핵심은 하락장에서 더 많이 매수하는 것입니다. 급락 매수와 하이브리드 전략이 가장 효과적이며, 특히 2008 금융위기나 코로나 폭락을 포함한 기간에서 적립식/전략 매수의 장점이 극대화됩니다. 반면, 꾸준한 상승장에서는 거치식이 유리합니다.':
+            '선택한 자산과 기간에서는 거치식이 모든 전략을 앞섰습니다. 이는 해당 기간이 강한 상승장이었기 때문입니다. 다른 기간이나 변동성이 큰 자산(예: 비트코인, 신흥국)으로 다시 시도해보세요.'
+        )
+      )
+    )
+  );
 }
 
 /* ===== 앱 ===== */
