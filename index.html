@@ -834,17 +834,19 @@ function BestPortfolios(){
 
   return React.createElement('div',null,
     React.createElement(HelpBox,null,
-      React.createElement('div',{className:'hitem'},React.createElement('b',null,'사용법: '),'기간을 선택하면 자동으로 최적 포트폴리오를 계산합니다.'),
-      React.createElement('div',{className:'hitem'},'단일 자산이 아닌 여러 자산에 분산 투자했을 때의 최적 배분을 보여줍니다.'),
+      React.createElement('div',{className:'hitem'},React.createElement('b',null,'사용법: '),'기간을 선택하면 매달 $500 무지성 적립식 기준으로 최적 포트폴리오를 자동 계산합니다.'),
+      React.createElement('div',{className:'hitem'},'전략? 타이밍? 그런 거 없습니다. 매달 같은 금액을 넣기만 했을 때 어떤 자산 조합이 최고였는지 보여줍니다.'),
       React.createElement('div',{className:'hitem'},React.createElement('span',{className:'tag'},'최대 수익'),' 총 수익률이 가장 높은 자산 조합'),
       React.createElement('div',{className:'hitem'},React.createElement('span',{className:'tag'},'위험 대비 수익'),' 낙폭 대비 수익률이 가장 좋은 자산 조합 (리스크 효율)'),
       React.createElement('div',{className:'hitem'},React.createElement('span',{className:'tag'},'최소 낙폭'),' 하락장에서 가장 적게 떨어지는 안정적인 자산 조합'),
       React.createElement('div',{className:'hitem',style:{marginTop:6}},'상위 5개 자산에 각 20%씩 균등 배분합니다.')
     ),
     React.createElement('div',{style:{textAlign:'center',padding:'28px 0 18px'}},
-      React.createElement('h2',{style:{fontSize:26,fontWeight:800,marginBottom:6}},'최적 포트폴리오'),
-      React.createElement('p',{style:{color:'var(--t2)',fontSize:13,marginBottom:16}},'$500/월 적립식 기준 최적 자산 배분'),
-      React.createElement('div',{className:'prow',style:{justifyContent:'center'}},[25,20,15,10,5,3].map(function(y){return React.createElement('div',{key:y,className:'pbtn'+(period===y?' on':''),onClick:function(){setP(y);}},y+'년');}))
+      React.createElement('h2',{style:{fontSize:26,fontWeight:800,marginBottom:8}},'🤷 무지성 적립식 최강 조합'),
+      React.createElement('p',{style:{fontSize:14,marginBottom:16,lineHeight:1.7}},
+        '매달 ',React.createElement('span',{style:{color:'#00ff88',fontWeight:800,fontSize:16}},'$500'),', 아무 생각 없이 ',React.createElement('span',{style:{color:'#ffcc00',fontWeight:700}},'꾸준히 넣기만'),' 했다면',React.createElement('br',null),'어떤 자산이 ',React.createElement('span',{style:{color:'#4488ff',fontWeight:700}},'최고'),'였을까?'
+      ),
+      React.createElement('div',{className:'prow',style:{justifyContent:'center'}},[25,20,15,10,5,3,1].map(function(y){return React.createElement('div',{key:y,className:'pbtn'+(period===y?' on':''),onClick:function(){setP(y);}},y+'년');}))
     ),
     busy?React.createElement('div',{className:'loading'},React.createElement('div',{className:'spinner'})):
     res&&React.createElement(React.Fragment,null,
@@ -1469,7 +1471,7 @@ function App(){
         React.createElement('div',{className:'logo-t'},'전략 연구')
       ),
       React.createElement('div',{className:'tabs'},
-        ['📊 시뮬레이터','🤖 AI 시뮬레이터','⏰ 타임머신','🏆 포트폴리오'].map(function(t,i){
+        ['📊 시뮬레이터','🤖 AI 시뮬레이터','⏰ 타임머신','🤷 무지성 포트폴리오'].map(function(t,i){
           return React.createElement('button',{key:i,className:'tab'+(tab===i?' on':''),onClick:function(){setTab(i);}},t);
         })
       )
