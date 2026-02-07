@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>최적 포트폴리오 위젯</title>
+<title>무지성 적립식 최강 조합 포트폴리오</title>
 <script src="data.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -89,7 +89,7 @@ body{background:transparent;font-family:'Noto Sans KR',system-ui,sans-serif}
   var PF_COLORS=['#00ff88','#4488ff','#ffcc00'];
 
   function buildPF(ranked,name,desc,color){
-    var top=ranked.slice(0,5),ws=[35,25,20,12,8];
+    var top=ranked.slice(0,5),ws=[20,20,20,20,20];
     var allocs=top.map(function(t,i){return{ticker:t,label:ar[t].label,w:ws[i],color:PC[ASSETS.indexOf(t)],ret:ar[t].totalReturn,curve:ar[t].curve};});
     var wr=allocs.reduce(function(s,a){return s+a.ret*a.w/100;},0);
     var wc=0;allocs.forEach(function(a){var r=ar[a.ticker];if(r)wc+=r.cagr*a.w/100;});
@@ -107,7 +107,7 @@ body{background:transparent;font-family:'Noto Sans KR',system-ui,sans-serif}
 
   // ===== Render =====
   var root=document.getElementById('widget');
-  var html='<div class="widget-title"><h2>'+PERIOD+'년 최적 포트폴리오</h2><p>$500/월 적립식 기준 · 데이터 자동 업데이트</p></div><div class="cards">';
+  var html='<div class="widget-title"><h2>'+PERIOD+'년 무지성 적립식 최강 조합</h2><p>$500/월 적립식 기준 · 데이터 자동 업데이트</p></div><div class="cards">';
 
   portfolios.forEach(function(p,pi){
     html+='<div class="card" onclick="window.open(\''+LINK+'\',\'_blank\')">';
