@@ -285,7 +285,6 @@ function CanvasChart(props){
 
     ctx.clearRect(0,0,w,h);
 
-    // 그리드
     ctx.strokeStyle='#1a1a2e';ctx.lineWidth=1;
     ctx.fillStyle='#505068';ctx.font='9px JetBrains Mono,monospace';ctx.textAlign='right';
     var yStep=Math.pow(10,Math.floor(Math.log10((yMax-yMin)/4)));
@@ -301,7 +300,6 @@ function CanvasChart(props){
       ctx.fillText(d.slice(0,4)+'.'+d.slice(5,7),xPos(i),h-8);
     }
 
-    // 이벤트 라인
     ctx.strokeStyle='#ff446630';ctx.setLineDash([3,3]);ctx.lineWidth=1;
     ctx.fillStyle='#ff446660';ctx.font='9px Noto Sans KR,sans-serif';ctx.textAlign='center';
     EVENTS.forEach(function(e){
@@ -314,7 +312,6 @@ function CanvasChart(props){
     });
     ctx.setLineDash([]);
 
-    // 거치식 (점선)
     if(showBH){
       ctx.setLineDash([4,4]);ctx.lineWidth=1.5;ctx.strokeStyle='#8888aa';
       results.forEach(function(r){
@@ -330,7 +327,6 @@ function CanvasChart(props){
       ctx.setLineDash([]);
     }
 
-    // 전략 라인
     results.forEach(function(r){
       ctx.strokeStyle=COLORS[r.ticker];ctx.lineWidth=2.5;ctx.lineJoin='round';ctx.lineCap='round';
       ctx.beginPath();var started=false;
@@ -563,6 +559,47 @@ function Simulator(){
   );
 }
 
+/* ===== 전략 설명 컴포넌트 ===== */
+function getStratExplain(label){
+  if(!label)return null;
+  if(label.indexOf('적립식')>=0){
+    var freq=label.indexOf('매월')>=0?'매월':label.indexOf('매주')>=0?'매주':'매일';
+    return freq+' 동일 금액을 매수합니다.\n• 시장 상황과 관계없이 정해진 주기마다 기계적으로 매수\n• 하락장에서 더 많은 수량, 상승장에서 적은 수량을 사는 효과\n• 평균 매입 단가를 낮추는 가장 기본적인 전략';
+  }
+  if(label.indexOf('이평선')>=0||label.indexOf('이평')>=0){
+    var mMatch=label.match(/(\d+)일/),tMatch=label.match(/([-]?\d+)%/);
+    var days=mMatch?mMatch[1]:'200',thresh=tMatch?tMatch[1]:'0';
+    var tNum=parseInt(thresh);
+    return '주가가 '+days+'일 이동평균선'+(tNum===0?' 아래':'보다 '+Math.abs(tNum)+'% 이상 아래')+'일 때 매수합니다.\n• '+days+'일 = 약 '+(Math.round(parseInt(days)/20))+'개월간의 평균 주가를 기준선으로 사용\n• '+thresh+'% = 이평선'+(tNum===0?' 바로 아래부터 매수 (추가 할인 없이)':'보다 '+Math.abs(tNum)+'% 더 떨어져야 매수 신호 발동')+'\n• 주가가 기준 위에 있으면 매수하지 않고 대기';
+  }
+  if(label.indexOf('급락')>=0){
+    var dMatch=label.match(/([-]?\d+)%/),rMatch=label.match(/RSI\s*(\d+)/);
+    var dip=dMatch?dMatch[1]:'-10',rsi=rMatch?rMatch[1]:'30';
+    var severe=Math.abs(parseInt(dip))>=20;
+    return '고점 대비 '+Math.abs(parseInt(dip))+'% 이상 하락하고 RSI가 '+rsi+' 이하일 때 매수합니다.\n• '+dip+'% = 최근 최고가에서 '+Math.abs(parseInt(dip))+'% 이상 떨어진 상태\n• RSI '+rsi+' = 과매도 구간 (숫자가 낮을수록 더 많이 빠진 상태)\n• 두 조건 모두 충족해야 매수'+(severe?'\n• 조건이 매우 까다로워 몇 년에 한 번만 발동 (금융위기·코로나급 폭락)':'');
+  }
+  if(label.indexOf('하이브리드')>=0){
+    var hMA=label.match(/MA(\d+)/),hDip=label.match(/([-]?\d+)%/);
+    var maD=hMA?hMA[1]:'200',dipD=hDip?Math.abs(parseInt(hDip[1])):'10';
+    return '평소엔 매월 적립식으로 꾸준히 매수 + 급락 시 추가 매수합니다.\n• 기본: 매월 정액 매수 (적립식)\n• 추가 매수 조건: '+maD+'일 이평선 이탈 또는 고점 대비 '+dipD+'%↓ + RSI 30 이하\n• 꾸준함 + 기회 포착을 동시에 추구하는 전략';
+  }
+  return null;
+}
+
+function StratExplain(props){
+  var label=props.label;
+  var s=useState(false),open=s[0],setOpen=s[1];
+  var text=getStratExplain(label);
+  if(!text)return null;
+  return React.createElement('div',{style:{marginTop:open?8:4}},
+    React.createElement('div',{onClick:function(e){e.stopPropagation();setOpen(!open);},style:{fontSize:10,color:'var(--t3)',cursor:'pointer',display:'flex',alignItems:'center',gap:4}},
+      React.createElement('span',{style:{fontSize:8,transition:'.2s',transform:open?'rotate(90deg)':'rotate(0deg)',display:'inline-block'}},'▶'),
+      '전략 설명'
+    ),
+    open&&React.createElement('div',{style:{marginTop:6,padding:'8px 10px',background:'rgba(255,255,255,.03)',borderRadius:6,border:'1px solid var(--bdr)',fontSize:10,color:'var(--t2)',lineHeight:1.8,whiteSpace:'pre-line'},onClick:function(e){e.stopPropagation();}},text)
+  );
+}
+
 /* ===== 탭 2: 타임머신 ===== */
 function TimeMachine(){
   var s1=useState(0),evt=s1[0],setE=s1[1];
@@ -575,13 +612,13 @@ function TimeMachine(){
     var yr=cYear?parseInt(cYear):LIFE_EVENTS[evt].y;
     var sd=yr+'-01-01';
     var strats=[
-      {t:'dca',l:'월 적립식',p:{budget:budget,frequency:'monthly'}},
-      {t:'dca',l:'주 적립식',p:{budget:budget,frequency:'weekly'}},
-      {t:'ma',l:'MA200 전략',p:{budget:budget,maPeriod:200,maThreshold:0}},
-      {t:'ma',l:'MA50 공격형',p:{budget:budget,maPeriod:50,maThreshold:-5}},
-      {t:'dip',l:'급락 -10%',p:{budget:budget,dipThreshold:-10,rsiThreshold:30}},
-      {t:'dip',l:'급락 -20%',p:{budget:budget,dipThreshold:-20,rsiThreshold:25}},
-      {t:'hybrid',l:'하이브리드',p:{budget:budget,maPeriod:200,dipThreshold:-10,rsiThreshold:30}}
+      {t:'dca',l:'적립식 (매월)',p:{budget:budget,frequency:'monthly'}},
+      {t:'dca',l:'적립식 (매주)',p:{budget:budget,frequency:'weekly'}},
+      {t:'ma',l:'이평선 (200일, 0%)',p:{budget:budget,maPeriod:200,maThreshold:0}},
+      {t:'ma',l:'이평선 (50일, -5%)',p:{budget:budget,maPeriod:50,maThreshold:-5}},
+      {t:'dip',l:'급락 매수 (-10%, RSI 30)',p:{budget:budget,dipThreshold:-10,rsiThreshold:30}},
+      {t:'dip',l:'급락 매수 (-20%, RSI 25)',p:{budget:budget,dipThreshold:-20,rsiThreshold:25}},
+      {t:'hybrid',l:'하이브리드 (MA200, -10%)',p:{budget:budget,maPeriod:200,dipThreshold:-10,rsiThreshold:30}}
     ];
     var all=[];
     ASSETS.forEach(function(tk){strats.forEach(function(s){var r=runStrategy(tk,s.t,s.p,sd,null);if(r){r.stratLabel=s.l;all.push(r);}});});
@@ -636,26 +673,42 @@ function TimeMachine(){
         React.createElement('div',{style:{fontSize:13,fontWeight:600,marginBottom:10}},'상위 3개 자산 곡선'),
         React.createElement(CanvasChart,{results:res.all.slice(0,3),showBH:false})
       ),
-      React.createElement('div',{style:{background:'var(--bg2)',border:'1px solid var(--bdr)',borderRadius:11,padding:16,maxHeight:480,overflowY:'auto'}},
+      React.createElement('div',{style:{background:'var(--bg2)',border:'1px solid var(--bdr)',borderRadius:11,padding:16,maxHeight:600,overflowY:'auto'}},
         React.createElement('div',{style:{fontSize:13,fontWeight:600,marginBottom:10}},'전체 결과 (상위 50개)'),
-        React.createElement('table',{className:'ct'},
-          React.createElement('thead',null,React.createElement('tr',null,
-            React.createElement('th',null,'순위'),React.createElement('th',null,'자산'),React.createElement('th',null,'전략'),React.createElement('th',null,'최종 자산'),React.createElement('th',null,'원금'),React.createElement('th',null,'수익률'),React.createElement('th',null,'CAGR'),React.createElement('th',null,'MDD')
-          )),
-          React.createElement('tbody',null,
-            res.all.slice(0,50).map(function(r,i){
-              return React.createElement('tr',{key:i},
-                React.createElement('td',{style:{color:i<3?'var(--y)':'var(--t4)'}},i+1),
-                React.createElement('td',{style:{color:COLORS[r.ticker],fontWeight:600}},r.label),
-                React.createElement('td',null,r.stratLabel),
-                React.createElement('td',{style:{color:'var(--g)',fontWeight:600}},fmt(r.finalValue)),
-                React.createElement('td',{style:{color:'var(--t2)'}},fmt(r.invested)),
-                React.createElement('td',{style:{color:r.totalReturn>0?'var(--g)':'var(--r)'}},fPct(r.totalReturn)),
-                React.createElement('td',null,fPct(r.cagr)),
-                React.createElement('td',{style:{color:'var(--r)'}},fPct(r.maxDD))
-              );
-            })
-          )
+        React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:8}},
+          res.all.slice(0,50).map(function(r,i){
+            var statsRow=[
+              React.createElement('div',{key:'ret',style:{textAlign:'center'}},
+                React.createElement('div',{style:{fontSize:8,color:'var(--t4)'}},'수익률'),
+                React.createElement('div',{style:{fontFamily:'JetBrains Mono',fontSize:14,fontWeight:700,color:r.totalReturn>0?'var(--g)':'var(--r)'}},fPct(r.totalReturn))
+              ),
+              React.createElement('div',{key:'final',style:{textAlign:'center'}},
+                React.createElement('div',{style:{fontSize:8,color:'var(--t4)'}},'최종'),
+                React.createElement('div',{style:{fontFamily:'JetBrains Mono',fontSize:14,fontWeight:600,color:'var(--g)'}},fmt(r.finalValue))
+              ),
+              React.createElement('div',{key:'inv',style:{textAlign:'center'}},
+                React.createElement('div',{style:{fontSize:8,color:'var(--t4)'}},'원금'),
+                React.createElement('div',{style:{fontFamily:'JetBrains Mono',fontSize:13,color:'var(--t2)'}},fmt(r.invested))
+              ),
+              React.createElement('div',{key:'cagr',style:{textAlign:'center'}},
+                React.createElement('div',{style:{fontSize:8,color:'var(--t4)'}},'CAGR'),
+                React.createElement('div',{style:{fontFamily:'JetBrains Mono',fontSize:13,color:'var(--t1)'}},fPct(r.cagr))
+              ),
+              React.createElement('div',{key:'mdd',style:{textAlign:'center'}},
+                React.createElement('div',{style:{fontSize:8,color:'var(--t4)'}},'MDD'),
+                React.createElement('div',{style:{fontFamily:'JetBrains Mono',fontSize:13,color:'var(--r)'}},fPct(r.maxDD))
+              )
+            ];
+            return React.createElement('div',{key:i,style:{background:'var(--bg1)',border:'1px solid var(--bdr)',borderRadius:9,padding:'12px 14px'}},
+              React.createElement('div',{style:{display:'flex',alignItems:'center',gap:8,marginBottom:6}},
+                React.createElement('span',{style:{fontSize:i<3?16:12,fontWeight:800,color:i<3?'var(--y)':'var(--t4)',minWidth:24}},i<3?['🥇','🥈','🥉'][i]:(i+1)),
+                React.createElement('span',{style:{color:COLORS[r.ticker],fontWeight:700,fontSize:12}},r.label),
+                React.createElement('span',{style:{color:'var(--t3)',fontSize:11}},r.stratLabel)
+              ),
+              React.createElement('div',{style:{display:'flex',justifyContent:'space-around',gap:8,paddingTop:8,borderTop:'1px solid var(--bdr)'}},statsRow),
+              React.createElement(StratExplain,{label:r.stratLabel})
+            );
+          })
         )
       )
     )
@@ -677,7 +730,6 @@ function ComparisonChart(props){
     var pad={t:16,r:16,b:30,l:66};
     var cw=w-pad.l-pad.r,ch=h-pad.t-pad.b;
     if(cw<40||ch<40)return;
-    // Y range across all portfolios
     var yMin=Infinity,yMax=-Infinity;
     portfolios.forEach(function(p){p.pfCurve.forEach(function(v){if(v<yMin)yMin=v;if(v>yMax)yMax=v;});});
     if(yMin===yMax){yMin*=0.9;yMax*=1.1;}
@@ -687,7 +739,6 @@ function ComparisonChart(props){
     var yPos=function(v){return pad.t+ch-(v-yMin)/(yMax-yMin)*ch;};
 
     ctx.clearRect(0,0,w,h);
-    // Grid
     ctx.strokeStyle='#1a1a2e';ctx.lineWidth=1;ctx.fillStyle='#686880';ctx.font='9px JetBrains Mono,monospace';ctx.textAlign='right';
     var yStep=Math.pow(10,Math.floor(Math.log10((yMax-yMin)/4)));
     if((yMax-yMin)/yStep>8)yStep*=2;
@@ -695,7 +746,6 @@ function ComparisonChart(props){
       var yy=yPos(yt);ctx.beginPath();ctx.moveTo(pad.l,yy);ctx.lineTo(w-pad.r,yy);ctx.stroke();
       ctx.fillText(fmt(yt),pad.l-6,yy+3);
     }
-    // X labels - use dates from longest portfolio
     var longest=portfolios[0];portfolios.forEach(function(p){if(p.pfDates.length>longest.pfDates.length)longest=p;});
     ctx.textAlign='center';
     var step=Math.max(1,Math.floor(longest.pfCurve.length/300));
@@ -704,10 +754,8 @@ function ComparisonChart(props){
       var d=longest.pfDates[i];
       if(d)ctx.fillText(d.slice(0,4)+'.'+d.slice(5,7),xPos(i,longest.pfDates.length),h-8);
     }
-    // Draw each portfolio
     portfolios.forEach(function(p){
       var pts=p.pfCurve;var s2=Math.max(1,Math.floor(pts.length/300));
-      // Area
       ctx.beginPath();ctx.moveTo(xPos(0,pts.length),h-pad.b);
       for(var i=0;i<pts.length;i+=s2){ctx.lineTo(xPos(i,pts.length),yPos(pts[i]));}
       ctx.lineTo(xPos(pts.length-1,pts.length),yPos(pts[pts.length-1]));
@@ -715,14 +763,12 @@ function ComparisonChart(props){
       var grad=ctx.createLinearGradient(0,0,0,h);
       grad.addColorStop(0,p.pfColor+'18');grad.addColorStop(1,p.pfColor+'03');
       ctx.fillStyle=grad;ctx.fill();
-      // Line
       ctx.beginPath();ctx.strokeStyle=p.pfColor;ctx.lineWidth=2.5;ctx.lineJoin='round';ctx.lineCap='round';
       var started=false;
       for(var i=0;i<pts.length;i+=s2){
         var xx=xPos(i,pts.length),yy2=yPos(pts[i]);
         if(!started){ctx.moveTo(xx,yy2);started=true;}else ctx.lineTo(xx,yy2);
       }
-      // Make sure last point is included
       ctx.lineTo(xPos(pts.length-1,pts.length),yPos(pts[pts.length-1]));
       ctx.stroke();
     });
@@ -769,7 +815,6 @@ function Sparkline(props){
     if(mn===mx){mn*=0.9;mx*=1.1;}
     var step=Math.max(1,Math.floor(data.length/300));
     var pts=[];for(var i=0;i<data.length;i+=step)pts.push(data[i]);if(pts[pts.length-1]!==data[data.length-1])pts.push(data[data.length-1]);
-    // Area fill
     ctx.beginPath();
     ctx.moveTo(pad,h-pad);
     pts.forEach(function(v,i){var x=pad+(i/(pts.length-1))*cw;var y=pad+ch-(v-mn)/(mx-mn)*ch;if(i===0)ctx.lineTo(x,y);else ctx.lineTo(x,y);});
@@ -777,7 +822,6 @@ function Sparkline(props){
     var grad=ctx.createLinearGradient(0,0,0,h);
     grad.addColorStop(0,color+'40');grad.addColorStop(1,color+'05');
     ctx.fillStyle=grad;ctx.fill();
-    // Line
     ctx.beginPath();ctx.strokeStyle=color;ctx.lineWidth=2;ctx.lineJoin='round';
     pts.forEach(function(v,i){var x=pad+(i/(pts.length-1))*cw;var y=pad+ch-(v-mn)/(mx-mn)*ch;if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);});
     ctx.stroke();
@@ -806,7 +850,6 @@ function BestPortfolios(){
       var allocs=top.map(function(t,i){var o=Object.assign({},ar[t]);o.w=ws[i];o.color=PC[ASSETS.indexOf(t)];return o;});
       var wr=allocs.reduce(function(s,a){return s+a.totalReturn*a.w/100;},0);
       var wc=allocs.reduce(function(s,a){return s+a.cagr*a.w/100;},0);
-      // Build weighted portfolio curve
       var minLen=Infinity;
       allocs.forEach(function(a){if(a.curve&&a.curve.length<minLen)minLen=a.curve.length;});
       var pfCurve=[],pfDates=[];
@@ -868,7 +911,6 @@ function BestPortfolios(){
           );
         })
       ),
-      // Big comparison chart
       React.createElement('div',{style:{marginTop:20,background:'var(--bg2)',border:'1px solid var(--bdr)',borderRadius:11,padding:20}},
         React.createElement('div',{style:{fontSize:14,fontWeight:700,marginBottom:4}},'포트폴리오 성과 비교'),
         React.createElement('div',{style:{fontSize:11,color:'var(--t2)',marginBottom:14}},period+'년간 $500/월 적립 시 포트폴리오 자산 변화'),
@@ -882,7 +924,6 @@ function BestPortfolios(){
         ),
         React.createElement(ComparisonChart,{portfolios:[res.maxR,res.bestS,res.lowDD],height:340})
       ),
-      // Individual rankings table
       React.createElement('div',{style:{marginTop:20,background:'var(--bg2)',border:'1px solid var(--bdr)',borderRadius:11,padding:16}},
         React.createElement('div',{style:{fontSize:13,fontWeight:600,marginBottom:10}},'개별 자산 순위 ('+period+'년 적립식)'),
         React.createElement('table',{className:'ct'},
@@ -927,7 +968,6 @@ function AIChart(props){
     var cw=w-pad.l-pad.r,ch=h-pad.t-pad.b;
     if(cw<40||ch<40)return;
 
-    // Collect all values for Y range
     var yMin=Infinity,yMax=-Infinity;
     data.forEach(function(pt){
       var vals=[pt.value,pt.buyHold,pt.invested];
@@ -941,7 +981,6 @@ function AIChart(props){
 
     ctx.clearRect(0,0,w,h);
 
-    // Grid
     ctx.strokeStyle='#1a1a2e';ctx.lineWidth=1;ctx.fillStyle='#686880';ctx.font='9px JetBrains Mono,monospace';ctx.textAlign='right';
     var yStep=Math.pow(10,Math.floor(Math.log10((yMax-yMin)/4)));
     if((yMax-yMin)/yStep>8)yStep*=2;
@@ -951,7 +990,6 @@ function AIChart(props){
       ctx.fillText(fmt(yt),pad.l-6,yy+3);
     }
 
-    // X labels
     ctx.textAlign='center';
     if(dates&&dates.length){
       var lStep=Math.max(1,Math.floor(dates.length/7));
@@ -960,7 +998,6 @@ function AIChart(props){
       }
     }
 
-    // Invested line (area fill)
     ctx.beginPath();ctx.moveTo(xPos(0),h-pad.b);
     data.forEach(function(pt,i){ctx.lineTo(xPos(i),yPos(pt.invested));});
     ctx.lineTo(xPos(data.length-1),h-pad.b);ctx.closePath();
@@ -969,12 +1006,10 @@ function AIChart(props){
     data.forEach(function(pt,i){if(i===0)ctx.moveTo(xPos(i),yPos(pt.invested));else ctx.lineTo(xPos(i),yPos(pt.invested));});
     ctx.stroke();
 
-    // Buy & hold line (dashed)
     ctx.beginPath();ctx.strokeStyle='#8888aa';ctx.lineWidth=1.5;ctx.setLineDash([6,4]);ctx.lineJoin='round';
     data.forEach(function(pt,i){if(i===0)ctx.moveTo(xPos(i),yPos(pt.buyHold));else ctx.lineTo(xPos(i),yPos(pt.buyHold));});
     ctx.stroke();ctx.setLineDash([]);
 
-    // Strategy line (solid green, area fill)
     ctx.beginPath();ctx.moveTo(xPos(0),h-pad.b);
     data.forEach(function(pt,i){ctx.lineTo(xPos(i),yPos(pt.value));});
     ctx.lineTo(xPos(data.length-1),h-pad.b);ctx.closePath();
@@ -985,7 +1020,6 @@ function AIChart(props){
     data.forEach(function(pt,i){if(i===0)ctx.moveTo(xPos(i),yPos(pt.value));else ctx.lineTo(xPos(i),yPos(pt.value));});
     ctx.stroke();
 
-    // Store meta for hover
     c._meta={pad:pad,cw:cw,data:data,dates:dates,xPos:xPos,yPos:yPos};
   },[data,dates,height]);
 
@@ -1065,14 +1099,12 @@ function AISimulator(){
     var margin=tr-bhR;
     var sharpe=mdd!==0?cagr/Math.abs(mdd):0;
     var assetInfo=combo.map(function(s){return{ticker:s.ticker,label:s.label,stratLabel:s.stratLabel};});
-    // Downsample curve for chart (max 200 points)
     var step=Math.max(1,Math.floor(combinedCurve.length/200));
     var chartCurve=[];
     for(var ci=0;ci<combinedCurve.length;ci+=step){
       chartCurve.push(combinedCurve[ci]);
     }
     if(chartCurve[chartCurve.length-1]!==combinedCurve[combinedCurve.length-1])chartCurve.push(combinedCurve[combinedCurve.length-1]);
-    // Get dates from first combo asset
     var chartDates=[];
     if(combo[0].curve){for(var ci=0;ci<combinedCurve.length;ci+=step){if(combo[0].curve[ci])chartDates.push(combo[0].curve[ci].date);}
     if(chartDates.length<chartCurve.length&&combo[0].curve[combinedCurve.length-1])chartDates.push(combo[0].curve[combinedCurve.length-1].date);}
@@ -1136,7 +1168,6 @@ function AISimulator(){
           (perAssetByPeriod[tk][p]||[]).forEach(function(r){
             var margin=r.totalReturn-r.bhReturn;
             var sharpe=r.maxDD!==0?r.cagr/Math.abs(r.maxDD):0;
-            // Downsample curve
             var step2=Math.max(1,Math.floor(r.curve.length/200));
             var cc=[],cd=[];
             for(var ci=0;ci<r.curve.length;ci+=step2){cc.push({value:r.curve[ci].value,buyHold:r.curve[ci].buyHold,invested:r.curve[ci].invested});cd.push(r.curve[ci].date);}
@@ -1235,10 +1266,8 @@ function AISimulator(){
     btnText+=' · '+(aiPeriod===0?'전체 기간':aiPeriod+'년')+')';
   }
 
-  // Build elements array for return
   var els=[];
 
-  // Help box
   els.push(React.createElement(HelpBox,{key:'help'},
     React.createElement('div',{className:'hitem'},React.createElement('b',null,'사용법: '),'자산을 선택하고 목표를 설정한 뒤 ',React.createElement('span',{style:{color:'var(--g)',fontWeight:600}},'AI 분석 시작'),' 버튼을 누르세요.'),
     React.createElement('div',{style:{marginTop:10,marginBottom:4,fontWeight:600,color:'var(--t1)',fontSize:11}},'작동 방식'),
@@ -1251,13 +1280,11 @@ function AISimulator(){
     React.createElement('div',{className:'hitem',style:{color:'var(--t3)',fontSize:10}},'⚡ 최대 5개 자산까지 선택 가능합니다')
   ));
 
-  // Hero
   els.push(React.createElement('div',{key:'hero',style:{textAlign:'center',padding:'28px 0 20px'}},
     React.createElement('h2',{style:{fontSize:28,fontWeight:800,background:'linear-gradient(135deg,#00ff88,#4488ff,#aa66ff)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',marginBottom:6}},'🤖 AI 시뮬레이터'),
     React.createElement('p',{style:{color:'var(--t2)',fontSize:13,maxWidth:500,margin:'0 auto'}},'수백 개의 전략 조합을 자동으로 분석하여 최적의 투자 전략을 찾아드립니다')
   ));
 
-  // Controls
   var assetBox=React.createElement('div',{style:{background:'var(--bg2)',border:'1px solid var(--bdr)',borderRadius:11,padding:16}},
     React.createElement('div',{className:'stitle',style:{marginTop:0}},'자산 선택 (최대 5개)'),
     assets.length>1?React.createElement('div',{style:{fontSize:10,color:'var(--g)',marginBottom:8,fontFamily:'JetBrains Mono'}},'균등 배분: 자산당 '+weightPct+'%'):null,
@@ -1302,7 +1329,6 @@ function AISimulator(){
 
   els.push(React.createElement('div',{key:'ctrl',style:{maxWidth:900,margin:'0 auto'}},grid,runBtn));
 
-  // Progress bar
   if(busy){
     els.push(React.createElement('div',{key:'prog',style:{maxWidth:900,margin:'0 auto 20px'}},
       React.createElement('div',{style:{background:'var(--bg2)',border:'1px solid var(--bdr)',borderRadius:9,padding:16}},
@@ -1317,11 +1343,9 @@ function AISimulator(){
     ));
   }
 
-  // Results
   if(res&&!busy){
     var resEls=[];
 
-    // Summary banner
     var bannerBg=res.goal==='beat'&&res.totalFound>0?'linear-gradient(135deg,rgba(0,255,136,.08),rgba(68,136,255,.08))':'var(--bg2)';
     var bannerBorder=res.goal==='beat'&&res.totalFound>0?'#00ff8840':'var(--bdr)';
     var bannerChildren=[];
@@ -1338,7 +1362,6 @@ function AISimulator(){
     bannerChildren.push(React.createElement('div',{key:'s',style:{fontSize:12,color:'var(--t2)'}},subText));
     resEls.push(React.createElement('div',{key:'banner',style:{background:bannerBg,border:'1px solid '+bannerBorder,borderRadius:11,padding:20,textAlign:'center',marginBottom:20}},bannerChildren));
 
-    // Top 6 cards
     if(res.top.length>0){
       var medals=['🥇','🥈','🥉','4','5','6'];
       var mColors=['var(--y)','#c0c0c0','#cc8844','var(--t3)','var(--t3)','var(--t3)'];
@@ -1380,7 +1403,6 @@ function AISimulator(){
       resEls.push(React.createElement('div',{key:'cards',style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))',gap:12,marginBottom:20}},cards));
     }
 
-    // Chart for selected result
     if(res.top.length>0){
       var sel=res.top[selIdx]||res.top[0];
       var chartTitle=sel.assets.map(function(a){return a.label.split(' (')[0]+': '+a.stratLabel;}).join(' + ');
@@ -1409,7 +1431,6 @@ function AISimulator(){
       ));
     }
 
-    // Full results — card list (mobile-friendly)
     if(res.top.length>0){
       var resultCards=res.top.map(function(r,i){
         var isSelected=i===selIdx;
@@ -1450,7 +1471,8 @@ function AISimulator(){
             React.createElement('div',{style:{fontSize:11,lineHeight:1.4,flex:1}},assetEls),
             React.createElement('span',{style:{fontSize:10,color:'var(--t3)',whiteSpace:'nowrap'}},r.period+'년')
           ),
-          React.createElement('div',{style:{display:'flex',justifyContent:'space-around',gap:8,paddingTop:8,borderTop:'1px solid var(--bdr)'}},statsRow)
+          React.createElement('div',{style:{display:'flex',justifyContent:'space-around',gap:8,paddingTop:8,borderTop:'1px solid var(--bdr)'}},statsRow),
+          React.createElement(StratExplain,{label:r.assets[0].stratLabel})
         );
       });
 
@@ -1460,7 +1482,6 @@ function AISimulator(){
       ));
     }
 
-    // Insight box
     if(res.goal==='beat'){
       var insightText;
       if(res.totalFound>0){
