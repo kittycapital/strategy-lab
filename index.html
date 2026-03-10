@@ -364,7 +364,7 @@ function Simulator(){
         React.createElement('div',{className:'sgrp'},React.createElement('div',{className:'shdr'},React.createElement('span',{className:'slbl'},'RSI 기준'),React.createElement('span',{className:'sval'},rsiT)),React.createElement('input',{type:'range',min:15,max:50,step:1,value:rsiT,onChange:function(e){setRT(+e.target.value);}}))
       ),
       React.createElement('div',{className:'stitle'},'투자 기간'),
-      React.createElement('div',{className:'prow'},[25,20,15,10,5,3].map(function(y){return React.createElement('div',{key:y,className:'pbtn'+(period===y?' on':''),onClick:function(){setP(y);}},y+'년');})),
+      (function(){var STEPS=[3,5,10,15,20,25];var idx=STEPS.indexOf(period);if(idx<0)idx=2;return React.createElement('div',{style:{width:'100%',maxWidth:400}},React.createElement('div',{style:{display:'flex',justifyContent:'space-between',marginBottom:5}},React.createElement('span',{style:{fontSize:10,color:'var(--t4)'}},'투자 기간'),React.createElement('span',{style:{fontFamily:'JetBrains Mono',fontSize:13,fontWeight:700,color:'var(--g)'}},period+'년')),React.createElement('input',{type:'range',min:0,max:5,step:1,value:idx,onChange:function(e){setP(STEPS[+e.target.value]);},style:{width:'100%'}}),React.createElement('div',{style:{display:'flex',justifyContent:'space-between',marginTop:3}},STEPS.map(function(y){return React.createElement('span',{key:y,style:{fontSize:9,color:period===y?'var(--g)':'var(--t4)',fontWeight:period===y?700:400,fontFamily:'JetBrains Mono',cursor:'pointer'},onClick:function(){setP(y);}},y+'년');})));})(),
       React.createElement('button',{className:'runbtn',onClick:run},'▶ 시뮬레이션 실행')
     ),
     React.createElement('div',{className:'rpanel'},
@@ -543,11 +543,15 @@ function BestPortfolios(){
     var byS=av.slice().sort(function(a,b){var sa=ar[a].maxDD!==0?ar[a].cagr/Math.abs(ar[a].maxDD):0;var sb=ar[b].maxDD!==0?ar[b].cagr/Math.abs(ar[b].maxDD):0;return sb-sa;});
     var build=function(ranked,name,desc,pfColor){
       var top=ranked.slice(0,5),ws=[20,20,20,20,20];var allocs=top.map(function(t,i){var o=Object.assign({},ar[t]);o.w=ws[i];o.color=PC[ASSETS.indexOf(t)];return o;});
-      var wr=allocs.reduce(function(s,a){return s+a.totalReturn*a.w/100;},0);var wc=allocs.reduce(function(s,a){return s+a.cagr*a.w/100;},0);
       var minLen=Infinity;allocs.forEach(function(a){if(a.curve&&a.curve.length<minLen)minLen=a.curve.length;});
       var pfCurve=[],pfDates=[];
       if(minLen>0&&minLen<Infinity){for(var i=0;i<minLen;i++){var wVal=0;allocs.forEach(function(a){if(a.curve&&a.curve[i])wVal+=a.curve[i].value*(a.w/100);});pfCurve.push(Math.round(wVal*100)/100);if(allocs[0].curve[i])pfDates.push(allocs[0].curve[i].date);}}
-      return{name:name,desc:desc,allocs:allocs,wr:wr,wc:wc,pfCurve:pfCurve,pfDates:pfDates,pfColor:pfColor};
+      var invested=allocs[0]?allocs[0].invested:0;
+      var finalVal=pfCurve.length>0?pfCurve[pfCurve.length-1]:0;
+      var wr=invested>0?(finalVal-invested)/invested*100:0;
+      var years=period;var wc=years>0&&invested>0?(Math.pow(finalVal/invested,1/years)-1)*100:0;
+      var pfMDD=0;if(pfCurve.length>0){var pk=pfCurve[0];for(var mi=1;mi<pfCurve.length;mi++){if(pfCurve[mi]>pk)pk=pfCurve[mi];var dd=(pfCurve[mi]-pk)/pk*100;if(dd<pfMDD)pfMDD=dd;}}
+      return{name:name,desc:desc,allocs:allocs,wr:wr,wc:wc,pfMDD:pfMDD,invested:invested,finalVal:finalVal,pfCurve:pfCurve,pfDates:pfDates,pfColor:pfColor};
     };
     setR({maxR:build(byR,'🚀 최대 수익','총 수익률 최대화 기준',PF_COLORS[0]),bestS:build(byS,'⚖️ 최고 위험 대비 수익','낙폭 대비 수익률 최적화',PF_COLORS[1]),lowDD:build(byDD,'🛡️ 최소 낙폭','포트폴리오 하락 최소화',PF_COLORS[2]),ind:av.map(function(t){return ar[t];}).sort(function(a,b){return b.totalReturn-a.totalReturn;})});
     setBusy(false);
@@ -563,18 +567,7 @@ function BestPortfolios(){
     React.createElement('div',{style:{textAlign:'center',padding:'28px 0 18px'}},
       React.createElement('h2',{style:{fontSize:26,fontWeight:800,marginBottom:8}},'🤷 무지성 적립식 최강 조합'),
       React.createElement('p',{style:{fontSize:14,marginBottom:16,lineHeight:1.7}},'매달 ',React.createElement('span',{style:{color:'#00ff88',fontWeight:800,fontSize:16}},'$500'),', 아무 생각 없이 ',React.createElement('span',{style:{color:'#ffcc00',fontWeight:700}},'꾸준히 넣기만'),' 했다면',React.createElement('br',null),'어떤 자산이 ',React.createElement('span',{style:{color:'#4488ff',fontWeight:700}},'최고'),'였을까?'),
-      (function(){
-        var STEPS=[1,3,5,10,15,20,25];
-        var idx=STEPS.indexOf(period);if(idx<0)idx=3;
-        return React.createElement('div',{style:{width:'100%',maxWidth:420,margin:'0 auto'}},
-          React.createElement('div',{style:{display:'flex',justifyContent:'space-between',marginBottom:6}},
-            React.createElement('span',{style:{fontSize:11,color:'var(--t4)'}},'투자 기간'),
-            React.createElement('span',{style:{fontFamily:'JetBrains Mono',fontSize:15,fontWeight:700,color:'var(--g)'}},period+'년')
-          ),
-          React.createElement('input',{type:'range',min:0,max:6,step:1,value:idx,onChange:function(e){setP(STEPS[+e.target.value]);},style:{width:'100%'}}),
-          React.createElement('div',{style:{display:'flex',justifyContent:'space-between',marginTop:4}},STEPS.map(function(y){return React.createElement('span',{key:y,style:{fontSize:9,color:period===y?'var(--g)':'var(--t4)',fontWeight:period===y?700:400,fontFamily:'JetBrains Mono',cursor:'pointer',transition:'.15s'},onClick:function(){setP(y);}},y+'년');}))
-        );
-      })()
+      (function(){var STEPS=[1,3,5,10,15,20,25];var idx=STEPS.indexOf(period);if(idx<0)idx=3;return React.createElement('div',{style:{width:'100%',maxWidth:420,margin:'0 auto'}},React.createElement('div',{style:{display:'flex',justifyContent:'space-between',marginBottom:6}},React.createElement('span',{style:{fontSize:11,color:'var(--t4)'}},'투자 기간'),React.createElement('span',{style:{fontFamily:'JetBrains Mono',fontSize:15,fontWeight:700,color:'var(--g)'}},period+'년')),React.createElement('input',{type:'range',min:0,max:6,step:1,value:idx,onChange:function(e){setP(STEPS[+e.target.value]);},style:{width:'100%'}}),React.createElement('div',{style:{display:'flex',justifyContent:'space-between',marginTop:4}},STEPS.map(function(y){return React.createElement('span',{key:y,style:{fontSize:9,color:period===y?'var(--g)':'var(--t4)',fontWeight:period===y?700:400,fontFamily:'JetBrains Mono',cursor:'pointer',transition:'.15s'},onClick:function(){setP(y);}},y+'년');})));})()
     ),
     busy?React.createElement('div',{className:'loading'},React.createElement('div',{className:'spinner'})):
     res&&React.createElement(React.Fragment,null,
@@ -582,7 +575,12 @@ function BestPortfolios(){
         return React.createElement('div',{key:pi,className:'pfcard'},
           React.createElement('h3',null,p.name),React.createElement('div',{className:'dd'},p.desc),
           React.createElement('div',{style:{fontFamily:'JetBrains Mono',fontSize:18,fontWeight:700,color:'var(--g)',marginBottom:3}},fPct(p.wr)+' 수익'),
-          React.createElement('div',{style:{fontFamily:'JetBrains Mono',fontSize:11,color:'var(--t2)',marginBottom:10}},'CAGR: '+fPct(p.wc)),
+          React.createElement('div',{style:{display:'flex',gap:12,marginBottom:10,flexWrap:'wrap'}},
+            React.createElement('span',{style:{fontFamily:'JetBrains Mono',fontSize:10,color:'var(--t3)'}},'최종: '+fmt(p.finalVal)),
+            React.createElement('span',{style:{fontFamily:'JetBrains Mono',fontSize:10,color:'var(--t4)'}},'원금: '+fmt(p.invested)),
+            React.createElement('span',{style:{fontFamily:'JetBrains Mono',fontSize:10,color:'var(--t3)'}},'CAGR: '+fPct(p.wc)),
+            React.createElement('span',{style:{fontFamily:'JetBrains Mono',fontSize:10,color:'var(--r)'}},'MDD: '+fPct(p.pfMDD))
+          ),
           React.createElement(Sparkline,{data:p.pfCurve,color:p.pfColor,height:100}),
           React.createElement('div',{className:'abar'},p.allocs.map(function(a,i){return React.createElement('div',{key:i,style:{width:a.w+'%',background:a.color},title:a.label+': '+a.w+'%'});})),
           React.createElement('div',{className:'alist'},p.allocs.map(function(a,i){return React.createElement('div',{key:i,className:'aitm'},React.createElement('span',null,React.createElement('span',{className:'dot',style:{background:a.color}}),a.label),React.createElement('span',{style:{fontFamily:'JetBrains Mono',fontWeight:600}},a.w+'% · '+fPct(a.totalReturn)));}))
